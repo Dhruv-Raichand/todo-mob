@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "336362297741",
+    "project_id": "mobile-task-app-2d2bc",
+    "storage_bucket": "mobile-task-app-2d2bc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:336362297741:android:52d9d894c3c725cd9ec5c4",
+        "android_client_info": {
+          "package_name": "com.todo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDZ18v-ep0-DVho_RFUxQ3zn_FRwypRGuo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
