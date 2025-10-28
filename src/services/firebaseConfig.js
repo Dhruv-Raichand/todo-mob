@@ -16,5 +16,4 @@ export const COLLECTIONS = {
   NOTIFICATIONS: 'notifications',
 };
 
-// Export Firebase services (without storage and functions)
 export { auth, firestore, messaging };
