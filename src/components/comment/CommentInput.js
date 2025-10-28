@@ -1,46 +1,54 @@
 import React, { useState } from 'react';
-import { View, TextInput, TouchableOpacity, StyleSheet, Text } from 'react-native';
+import {
+  View,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../../constants/colors';
 
-const CommentInput = ({ onSubmit, placeholder = 'Add a comment...' }) => {
-  const [comment, setComment] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+const CommentInput = ({ onSend, disabled = false }) => {
+  const [text, setText] = useState('');
 
-  const handleSubmit = async () => {
-    if (!comment.trim()) return;
-
-    setSubmitting(true);
-    try {
-      await onSubmit(comment.trim());
-      setComment('');
-    } catch (error) {
-      console.error('Error submitting comment:', error);
-    } finally {
-      setSubmitting(false);
+  const handleSend = () => {
+    if (text.trim()) {
+      onSend(text.trim());
+      setText('');
     }
   };
 
   return (
-    <View style={styles.container}>
-      <TextInput
-        style={styles.input}
-        placeholder={placeholder}
-        placeholderTextColor={COLORS.textSecondary}
-        value={comment}
-        onChangeText={setComment}
-        multiline
-        maxLength={500}
-      />
-      <TouchableOpacity
-        style={[styles.button, !comment.trim() && styles.buttonDisabled]}
-        onPress={handleSubmit}
-        disabled={!comment.trim() || submitting}
-      >
-        <Text style={styles.buttonText}>
-          {submitting ? 'Sending...' : 'Send'}
-        </Text>
-      </TouchableOpacity>
-    </View>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <View style={styles.container}>
+        <TextInput
+          style={styles.input}
+          value={text}
+          onChangeText={setText}
+          placeholder="Add a comment..."
+          placeholderTextColor={COLORS.textLight}
+          multiline
+          maxLength={500}
+          editable={!disabled}
+        />
+        <TouchableOpacity
+          style={[styles.sendButton, !text.trim() && styles.sendButtonDisabled]}
+          onPress={handleSend}
+          disabled={!text.trim() || disabled}
+        >
+          <Icon
+            name="send"
+            size={24}
+            color={text.trim() ? COLORS.primary : COLORS.disabled}
+          />
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -55,31 +63,26 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    minHeight: 40,
-    maxHeight: 100,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
-    fontSize: 14,
-    color: COLORS.text,
     backgroundColor: COLORS.background,
-  },
-  button: {
-    backgroundColor: COLORS.primary,
+    borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 20,
+    paddingTop: 10,
+    fontSize: 16,
+    color: COLORS.text,
+    maxHeight: 100,
+    marginRight: 8,
   },
-  buttonDisabled: {
-    backgroundColor: COLORS.disabled,
+  sendButton: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 22,
+    backgroundColor: `${COLORS.primary}15`,
   },
-  buttonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
+  sendButtonDisabled: {
+    backgroundColor: COLORS.background,
   },
 });
 

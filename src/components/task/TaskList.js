@@ -6,13 +6,20 @@ import { COLORS } from '../../constants/colors';
 const TaskList = ({
   tasks,
   onTaskPress,
+  onTaskLongPress,
+  isTeacher = false,
   emptyMessage = 'No tasks available',
   refreshing = false,
   onRefresh,
 }) => {
-  const renderItem = ({ item }) => (
-    <TaskCard task={item} onPress={() => onTaskPress(item)} />
-  );
+ const renderItem = ({ item }) => (
+  <TaskCard
+    task={item}
+    onPress={() => onTaskPress(item)}
+    onLongPress={onTaskLongPress ? () => onTaskLongPress(item) : undefined}
+    isTeacher={isTeacher}
+  />
+);
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>

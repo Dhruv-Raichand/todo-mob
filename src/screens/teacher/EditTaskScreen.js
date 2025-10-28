@@ -15,34 +15,57 @@ import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
-import { useTasks } from '../../hooks/useTasks';
+import { taskService } from '../../services/taskService';
 import { userService } from '../../services/userService';
 import { COLORS } from '../../constants/colors';
 import { PRIORITY_LIST } from '../../constants/priorities';
 import { formatDate } from '../../utils/dateUtils';
 
-const CreateTaskScreen = ({ navigation }) => {
+const EditTaskScreen = ({ route, navigation }) => {
+  const { taskId } = route.params;
   const { user } = useAuth();
-  const { createTask } = useTasks();
+  const [task, setTask] = useState(null);
   const [students, setStudents] = useState([]);
+  const [loadingTask, setLoadingTask] = useState(true);
   const [loadingStudents, setLoadingStudents] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectAll, setSelectAll] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     assignedStudents: [],
     priority: 'medium',
-    deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+    deadline: new Date(),
   });
 
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
+    loadTask();
     loadStudents();
   }, []);
+
+  const loadTask = async () => {
+    try {
+      const taskData = await taskService.getTask(taskId);
+      if (taskData) {
+        setTask(taskData);
+        setFormData({
+          title: taskData.title,
+          description: taskData.description || '',
+          assignedStudents: taskData.assignedStudents || [],
+          priority: taskData.priority,
+          deadline: taskData.deadline.toDate ? taskData.deadline.toDate() : new Date(taskData.deadline),
+        });
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load task');
+      console.error(error);
+    } finally {
+      setLoadingTask(false);
+    }
+  };
 
   const loadStudents = async () => {
     try {
@@ -68,18 +91,6 @@ const CreateTaskScreen = ({ navigation }) => {
         : [...prev.assignedStudents, studentId];
       return { ...prev, assignedStudents };
     });
-  };
-
-  const toggleSelectAll = () => {
-    if (selectAll) {
-      setFormData(prev => ({ ...prev, assignedStudents: [] }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        assignedStudents: students.map(s => s.id),
-      }));
-    }
-    setSelectAll(!selectAll);
   };
 
   const validate = () => {
@@ -108,29 +119,21 @@ const CreateTaskScreen = ({ navigation }) => {
   const handleSubmit = async () => {
     if (!validate()) return;
 
-    if (students.length === 0) {
-      Alert.alert('Error', 'No students available to assign tasks');
-      return;
-    }
-
     setSubmitting(true);
     try {
-      await createTask({
+      await taskService.updateTask(taskId, {
         title: formData.title.trim(),
         description: formData.description.trim(),
-        assignedTo: formData.assignedStudents, // Will be converted to assignedStudents array
+        assignedStudents: formData.assignedStudents,
         priority: formData.priority,
         deadline: formData.deadline,
-        teacherId: user.uid,
       });
 
-      Alert.alert(
-        'Success',
-        `Task created and assigned to ${formData.assignedStudents.length} student(s)!`,
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
+      Alert.alert('Success', 'Task updated successfully!', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to create task');
+      Alert.alert('Error', 'Failed to update task');
       console.error(error);
     } finally {
       setSubmitting(false);
@@ -144,25 +147,14 @@ const CreateTaskScreen = ({ navigation }) => {
     }
   };
 
-  if (loadingStudents) {
-    return <LoadingSpinner message="Loading students..." />;
-  }
-
-  if (students.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>
-          No students found. Students need to register first.
-        </Text>
-        <Button title="Go Back" onPress={() => navigation.goBack()} />
-      </View>
-    );
+  if (loadingTask || loadingStudents) {
+    return <LoadingSpinner message="Loading..." />;
   }
 
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Task Details</Text>
+        <Text style={styles.sectionTitle}>Edit Task</Text>
 
         <Input
           label="Task Title *"
@@ -184,46 +176,29 @@ const CreateTaskScreen = ({ navigation }) => {
           icon="text"
         />
 
-        <View style={styles.studentsSection}>
-          <View style={styles.studentsHeader}>
-            <Text style={styles.label}>Assign to Students *</Text>
+        <Text style={styles.label}>Assigned Students *</Text>
+        <Card style={styles.studentsCard}>
+          {students.map(student => (
             <TouchableOpacity
-              style={styles.selectAllButton}
-              onPress={toggleSelectAll}
+              key={student.id}
+              style={styles.studentRow}
+              onPress={() => toggleStudent(student.id)}
             >
-              <Text style={styles.selectAllText}>
-                {selectAll ? 'Deselect All' : 'Select All'}
-              </Text>
+              <CheckBox
+                value={formData.assignedStudents.includes(student.id)}
+                onValueChange={() => toggleStudent(student.id)}
+                tintColors={{ true: COLORS.primary, false: COLORS.border }}
+              />
+              <View style={styles.studentInfo}>
+                <Text style={styles.studentName}>{student.name}</Text>
+                <Text style={styles.studentEmail}>{student.email}</Text>
+              </View>
             </TouchableOpacity>
-          </View>
-
-          <Text style={styles.selectedCount}>
-            {formData.assignedStudents.length} of {students.length} selected
-          </Text>
-
-          <Card style={styles.studentsCard}>
-            {students.map(student => (
-              <TouchableOpacity
-                key={student.id}
-                style={styles.studentRow}
-                onPress={() => toggleStudent(student.id)}
-              >
-                <CheckBox
-                  value={formData.assignedStudents.includes(student.id)}
-                  onValueChange={() => toggleStudent(student.id)}
-                  tintColors={{ true: COLORS.primary, false: COLORS.border }}
-                />
-                <View style={styles.studentInfo}>
-                  <Text style={styles.studentName}>{student.name}</Text>
-                  <Text style={styles.studentEmail}>{student.email}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </Card>
-          {errors.assignedStudents && (
-            <Text style={styles.errorText}>{errors.assignedStudents}</Text>
-          )}
-        </View>
+          ))}
+        </Card>
+        {errors.assignedStudents && (
+          <Text style={styles.errorText}>{errors.assignedStudents}</Text>
+        )}
 
         <View style={styles.pickerContainer}>
           <Text style={styles.label}>Priority</Text>
@@ -268,7 +243,7 @@ const CreateTaskScreen = ({ navigation }) => {
         )}
 
         <Button
-          title="Create Task"
+          title="Update Task"
           onPress={handleSubmit}
           loading={submitting}
           style={styles.submitButton}
@@ -298,34 +273,10 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     marginBottom: 16,
   },
-  studentsSection: {
-    marginBottom: 16,
-  },
-  studentsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
   label: {
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
-  },
-  selectAllButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: COLORS.primary,
-    borderRadius: 12,
-  },
-  selectAllText: {
-    fontSize: 12,
-    color: '#fff',
-    fontWeight: '600',
-  },
-  selectedCount: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
     marginBottom: 8,
   },
   studentsCard: {
@@ -387,19 +338,6 @@ const styles = StyleSheet.create({
   submitButton: {
     marginTop: 8,
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: COLORS.background,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
 });
 
-export default CreateTaskScreen;
+export default EditTaskScreen;

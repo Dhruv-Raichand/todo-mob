@@ -49,6 +49,31 @@ const TaskDetailScreen = ({ route, navigation }) => {
     }
   };
 
+  const handleMarkComplete = () => {
+    Alert.alert(
+      'Mark as Complete',
+      'Are you sure you want to mark this task as 100% complete?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Mark Complete',
+          onPress: async () => {
+            try {
+              setUpdating(true);
+              await taskService.updateTaskProgress(taskId, 100);
+              setProgress(100);
+              Alert.alert('Success', 'Task marked as complete!');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to mark task complete');
+            } finally {
+              setUpdating(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleAddComment = async text => {
     try {
       await taskService.addComment(taskId, user.uid, userData.name, text);
@@ -74,6 +99,7 @@ const TaskDetailScreen = ({ route, navigation }) => {
   const deadlineColor = getDeadlineColor(task.deadline);
   const progressColor = getProgressColor(progress);
   const hasProgressChanged = progress !== task.progress;
+  const isCompleted = progress === 100;
 
   return (
     <View style={styles.container}>
@@ -118,7 +144,7 @@ const TaskDetailScreen = ({ route, navigation }) => {
         {/* Progress Card */}
         <Card style={styles.progressCard}>
           <Text style={styles.sectionTitle}>Update Progress</Text>
-          
+
           <View style={styles.progressHeader}>
             <Text style={styles.progressLabel}>Current Progress</Text>
             <Text style={[styles.progressValue, { color: progressColor }]}>
@@ -140,25 +166,64 @@ const TaskDetailScreen = ({ route, navigation }) => {
             </View>
           </View>
 
-          <Slider
-            style={styles.slider}
-            minimumValue={0}
-            maximumValue={100}
-            step={5}
-            value={progress}
-            onValueChange={setProgress}
-            minimumTrackTintColor={progressColor}
-            maximumTrackTintColor={COLORS.border}
-            thumbTintColor={progressColor}
-          />
+          {!isCompleted && (
+            <>
+              <Slider
+                style={styles.slider}
+                minimumValue={0}
+                maximumValue={100}
+                step={5}
+                value={progress}
+                onValueChange={setProgress}
+                minimumTrackTintColor={progressColor}
+                maximumTrackTintColor={COLORS.border}
+                thumbTintColor={progressColor}
+              />
 
-          {hasProgressChanged && (
-            <Button
-              title="Save Progress"
-              onPress={handleUpdateProgress}
-              loading={updating}
-              style={styles.updateButton}
-            />
+              <View style={styles.quickActions}>
+                <TouchableOpacity
+                  style={styles.quickButton}
+                  onPress={() => setProgress(25)}
+                >
+                  <Text style={styles.quickButtonText}>25%</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.quickButton}
+                  onPress={() => setProgress(50)}
+                >
+                  <Text style={styles.quickButtonText}>50%</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.quickButton}
+                  onPress={() => setProgress(75)}
+                >
+                  <Text style={styles.quickButtonText}>75%</Text>
+                </TouchableOpacity>
+              </View>
+
+              {hasProgressChanged && (
+                <Button
+                  title="Save Progress"
+                  onPress={handleUpdateProgress}
+                  loading={updating}
+                  style={styles.updateButton}
+                />
+              )}
+
+              <Button
+                title="✓ Mark as Complete"
+                onPress={handleMarkComplete}
+                variant="secondary"
+                disabled={updating}
+              />
+            </>
+          )}
+
+          {isCompleted && (
+            <View style={styles.completedBadge}>
+              <Icon name="check-circle" size={48} color={COLORS.success} />
+              <Text style={styles.completedText}>Task Completed!</Text>
+            </View>
           )}
         </Card>
 
@@ -299,8 +364,35 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 40,
   },
+  quickActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 12,
+  },
+  quickButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    backgroundColor: COLORS.background,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  quickButtonText: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
   updateButton: {
-    marginTop: 8,
+    marginBottom: 8,
+  },
+  completedBadge: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  completedText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.success,
+    marginTop: 12,
   },
   commentsCard: {
     marginHorizontal: 16,

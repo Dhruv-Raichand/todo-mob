@@ -2,6 +2,7 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import TeacherDashboard from '../screens/teacher/TeacherDashboard';
 import CreateTaskScreen from '../screens/teacher/CreateTaskScreen';
+import EditTaskScreen from '../screens/teacher/EditTaskScreen';
 import TaskDetailScreen from '../screens/student/TaskDetailScreen';
 import AnalyticsScreen from '../screens/teacher/AnalyticsScreen';
 import { COLORS } from '../constants/colors';
@@ -30,6 +31,11 @@ const TeacherNavigator = () => {
         name="CreateTask"
         component={CreateTaskScreen}
         options={{ title: 'Create New Task' }}
+      />
+      <Stack.Screen
+        name="EditTask"
+        component={EditTaskScreen}
+        options={{ title: 'Edit Task' }}
       />
       <Stack.Screen
         name="TaskDetail"
