@@ -30,6 +30,7 @@ export const authService = {
 
       return userCredential.user;
     } catch (error) {
+      console.error('Register error:', error);
       throw error;
     }
   },
@@ -43,6 +44,7 @@ export const authService = {
       );
       return userCredential.user;
     } catch (error) {
+      console.error('Login error:', error);
       throw error;
     }
   },
@@ -52,6 +54,7 @@ export const authService = {
     try {
       await auth().signOut();
     } catch (error) {
+      console.error('Logout error:', error);
       throw error;
     }
   },
@@ -61,6 +64,7 @@ export const authService = {
     try {
       await auth().sendPasswordResetEmail(email);
     } catch (error) {
+      console.error('Reset password error:', error);
       throw error;
     }
   },
@@ -79,6 +83,7 @@ export const authService = {
         .get();
       return userDoc.exists ? userDoc.data() : null;
     } catch (error) {
+      console.error('Get user data error:', error);
       throw error;
     }
   },
@@ -94,6 +99,7 @@ export const authService = {
           updatedAt: firestore.FieldValue.serverTimestamp(),
         });
     } catch (error) {
+      console.error('Update profile error:', error);
       throw error;
     }
   },

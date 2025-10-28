@@ -7,7 +7,10 @@ export const useTaskDetail = taskId => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!taskId) return;
+    if (!taskId) {
+      setLoading(false);
+      return;
+    }
 
     // Get task details
     const fetchTask = async () => {
@@ -28,7 +31,11 @@ export const useTaskDetail = taskId => {
       setComments(commentsData);
     });
 
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [taskId]);
 
   return { task, comments, loading };

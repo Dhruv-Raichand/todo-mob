@@ -27,7 +27,9 @@ const AuthNavigator = () => {
       <Stack.Screen
         name="Register"
         component={RegisterScreen}
-        options={{ title: 'Create Account' }}
+        options={{
+          title: 'Create Account',
+        }}
       />
     </Stack.Navigator>
   );

@@ -1,8 +1,30 @@
+import { COLORS } from './colors';
+
 export const PRIORITIES = {
-  LOW: { value: 'low', label: 'Low', color: '#4CAF50' },
-  MEDIUM: { value: 'medium', label: 'Medium', color: '#FFC107' },
-  HIGH: { value: 'high', label: 'High', color: '#FF9800' },
-  URGENT: { value: 'urgent', label: 'Urgent', color: '#F44336' },
+  LOW: { 
+    value: 'low', 
+    label: 'Low', 
+    color: COLORS.priorityLow,
+    icon: '🟢'
+  },
+  MEDIUM: { 
+    value: 'medium', 
+    label: 'Medium', 
+    color: COLORS.priorityMedium,
+    icon: '🔵'
+  },
+  HIGH: { 
+    value: 'high', 
+    label: 'High', 
+    color: COLORS.priorityHigh,
+    icon: '🟠'
+  },
+  URGENT: { 
+    value: 'urgent', 
+    label: 'Urgent', 
+    color: COLORS.priorityUrgent,
+    icon: '🔴'
+  },
 };
 
 export const PRIORITY_LIST = [

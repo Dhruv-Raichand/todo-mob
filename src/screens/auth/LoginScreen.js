@@ -3,36 +3,41 @@ import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   KeyboardAvoidingView,
   Platform,
   Alert,
-  ScrollView,
-  TouchableOpacity,
 } from 'react-native';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { COLORS } from '../../constants/colors';
-import { validateEmail } from '../../utils/validationUtils';
-import { getErrorMessage } from '../../utils/validationUtils';
+import { validateEmail, getErrorMessage } from '../../utils/validationUtils';
 
 const LoginScreen = ({ navigation }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({});
   const { login } = useAuth();
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  });
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
 
-  const validateForm = () => {
+  const handleChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setErrors(prev => ({ ...prev, [field]: '' }));
+  };
+
+  const validate = () => {
     const newErrors = {};
 
-    if (!email) {
+    if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
-    } else if (!validateEmail(email)) {
-      newErrors.email = 'Invalid email address';
+    } else if (!validateEmail(formData.email)) {
+      newErrors.email = 'Please enter a valid email';
     }
 
-    if (!password) {
+    if (!formData.password) {
       newErrors.password = 'Password is required';
     }
 
@@ -41,11 +46,11 @@ const LoginScreen = ({ navigation }) => {
   };
 
   const handleLogin = async () => {
-    if (!validateForm()) return;
+    if (!validate()) return;
 
     setLoading(true);
     try {
-      await login(email.trim(), password);
+      await login(formData.email.trim(), formData.password);
     } catch (error) {
       Alert.alert('Login Failed', getErrorMessage(error));
     } finally {
@@ -55,69 +60,54 @@ const LoginScreen = ({ navigation }) => {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.content}>
-          <View style={styles.headerContainer}>
-            <Text style={styles.title}>Welcome Back! 👋</Text>
-            <Text style={styles.subtitle}>
-              Sign in to continue to TaskMaster
-            </Text>
-          </View>
+        <View style={styles.header}>
+          <Text style={styles.title}>Welcome Back!</Text>
+          <Text style={styles.subtitle}>Login to manage your tasks</Text>
+        </View>
 
-          <View style={styles.formContainer}>
-            <Input
-              label="Email Address"
-              placeholder="Enter your email"
-              value={email}
-              onChangeText={text => {
-                setEmail(text);
-                setErrors(prev => ({ ...prev, email: '' }));
-              }}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              error={errors.email}
-            />
+        <View style={styles.form}>
+          <Input
+            label="Email Address"
+            placeholder="Enter your email"
+            value={formData.email}
+            onChangeText={text => handleChange('email', text)}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            error={errors.email}
+            icon="email-outline"
+          />
 
-            <Input
-              label="Password"
-              placeholder="Enter your password"
-              value={password}
-              onChangeText={text => {
-                setPassword(text);
-                setErrors(prev => ({ ...prev, password: '' }));
-              }}
-              secureTextEntry
-              error={errors.password}
-            />
+          <Input
+            label="Password"
+            placeholder="Enter your password"
+            value={formData.password}
+            onChangeText={text => handleChange('password', text)}
+            secureTextEntry
+            autoCapitalize="none"
+            error={errors.password}
+            icon="lock-outline"
+          />
 
-            <TouchableOpacity
-              onPress={() => navigation.navigate('ForgotPassword')}
-              style={styles.forgotPassword}
-            >
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-            </TouchableOpacity>
+          <Button
+            title="Login"
+            onPress={handleLogin}
+            loading={loading}
+            style={styles.loginButton}
+          />
 
-            <Button
-              title="Login"
-              onPress={handleLogin}
-              loading={loading}
-              style={styles.loginButton}
-            />
-
-            <View style={styles.registerContainer}>
-              <Text style={styles.registerText}>Don't have an account? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-                <Text style={styles.registerLink}>Sign Up</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          <Button
+            title="Don't have an account? Register"
+            onPress={() => navigation.navigate('Register')}
+            variant="outline"
+          />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -131,53 +121,29 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-  },
-  content: {
-    flex: 1,
     padding: 24,
     justifyContent: 'center',
   },
-  headerContainer: {
+  header: {
     marginBottom: 32,
+    alignItems: 'center',
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: COLORS.primary,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
     color: COLORS.textSecondary,
+    textAlign: 'center',
   },
-  formContainer: {
-    marginBottom: 24,
-  },
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginBottom: 24,
-  },
-  forgotPasswordText: {
-    color: COLORS.primary,
-    fontSize: 14,
-    fontWeight: '600',
+  form: {
+    width: '100%',
   },
   loginButton: {
     marginTop: 8,
-  },
-  registerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 24,
-  },
-  registerText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  registerLink: {
-    fontSize: 14,
-    color: COLORS.primary,
-    fontWeight: '600',
   },
 });
 

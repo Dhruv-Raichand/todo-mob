@@ -1,144 +1,220 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { useTasks } from '../../hooks/useTasks';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Card from '../../components/common/Card';
+import { useTasks } from '../../hooks/useTasks';
+import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { COLORS } from '../../constants/colors';
-import { TASK_STATUS } from '../../constants/taskStatus';
-import { PRIORITIES } from '../../constants/priorities';
+import { isOverdue, getDaysUntilDeadline } from '../../utils/dateUtils';
 
 const AnalyticsScreen = () => {
-  const { tasks } = useTasks();
+  const { tasks, loading } = useTasks();
 
-  // Calculate statistics
-  const totalTasks = tasks.length;
-  const completedTasks = tasks.filter(
-    task => task.status === TASK_STATUS.COMPLETED
-  ).length;
-  const inProgressTasks = tasks.filter(
-    task => task.status === TASK_STATUS.IN_PROGRESS
-  ).length;
-  const notStartedTasks = tasks.filter(
-    task => task.status === TASK_STATUS.NOT_STARTED
-  ).length;
+  const analytics = useMemo(() => {
+    const total = tasks.length;
+    const completed = tasks.filter(t => t.progress === 100).length;
+    const inProgress = tasks.filter(t => t.progress > 0 && t.progress < 100).length;
+    const notStarted = tasks.filter(t => t.progress === 0).length;
+    const overdue = tasks.filter(t => isOverdue(t.deadline) && t.progress < 100).length;
 
-  const completionRate =
-    totalTasks > 0 ? ((completedTasks / totalTasks) * 100).toFixed(1) : 0;
+    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+    
+    const avgProgress = total > 0
+      ? Math.round(tasks.reduce((sum, t) => sum + (t.progress || 0), 0) / total)
+      : 0;
 
-  // Priority breakdown
-  const priorityBreakdown = {
-    urgent: tasks.filter(task => task.priority === 'urgent').length,
-    high: tasks.filter(task => task.priority === 'high').length,
-    medium: tasks.filter(task => task.priority === 'medium').length,
-    low: tasks.filter(task => task.priority === 'low').length,
-  };
+    const priorityBreakdown = {
+      urgent: tasks.filter(t => t.priority === 'urgent').length,
+      high: tasks.filter(t => t.priority === 'high').length,
+      medium: tasks.filter(t => t.priority === 'medium').length,
+      low: tasks.filter(t => t.priority === 'low').length,
+    };
 
-  // Average progress
-  const totalProgress = tasks.reduce((sum, task) => sum + (task.progress || 0), 0);
-  const averageProgress =
-    totalTasks > 0 ? (totalProgress / totalTasks).toFixed(1) : 0;
+    const dueSoon = tasks.filter(t => {
+      const days = getDaysUntilDeadline(t.deadline);
+      return days > 0 && days <= 3 && t.progress < 100;
+    }).length;
+
+    return {
+      total,
+      completed,
+      inProgress,
+      notStarted,
+      overdue,
+      completionRate,
+      avgProgress,
+      priorityBreakdown,
+      dueSoon,
+    };
+  }, [tasks]);
+
+  if (loading) {
+    return <LoadingSpinner message="Loading analytics..." />;
+  }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-    >
-      <Text style={styles.pageTitle}>Task Analytics 📊</Text>
-
+    <ScrollView style={styles.container}>
+      {/* Overview Card */}
       <Card style={styles.card}>
-        <Text style={styles.cardTitle}>Overview</Text>
-        <View style={styles.statGrid}>
+        <View style={styles.cardHeader}>
+          <Icon name="chart-line" size={28} color={COLORS.primary} />
+          <Text style={styles.cardTitle}>Overview</Text>
+        </View>
+
+        <View style={styles.statsGrid}>
           <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: COLORS.primary }]}>
-              {totalTasks}
-            </Text>
+            <Text style={styles.statValue}>{analytics.total}</Text>
             <Text style={styles.statLabel}>Total Tasks</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: COLORS.success }]}>
-              {completedTasks}
+            <Text style={[styles.statValue, { color: COLORS.success }]}>
+              {analytics.completed}
             </Text>
             <Text style={styles.statLabel}>Completed</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: COLORS.info }]}>
-              {inProgressTasks}
+            <Text style={[styles.statValue, { color: COLORS.info }]}>
+              {analytics.inProgress}
             </Text>
             <Text style={styles.statLabel}>In Progress</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: COLORS.warning }]}>
-              {notStartedTasks}
+            <Text style={[styles.statValue, { color: COLORS.textSecondary }]}>
+              {analytics.notStarted}
             </Text>
             <Text style={styles.statLabel}>Not Started</Text>
           </View>
         </View>
       </Card>
 
+      {/* Completion Rate Card */}
       <Card style={styles.card}>
-        <Text style={styles.cardTitle}>Completion Rate</Text>
-        <View style={styles.progressBarContainer}>
-          <View style={styles.progressBarBackground}>
-            <View
-              style={[
-                styles.progressBarFill,
-                { width: `${completionRate}%` },
-              ]}
-            />
-          </View>
-          <Text style={styles.percentageText}>{completionRate}%</Text>
+        <View style={styles.cardHeader}>
+          <Icon name="percent-outline" size={28} color={COLORS.success} />
+          <Text style={styles.cardTitle}>Completion Rate</Text>
         </View>
-      </Card>
-
-      <Card style={styles.card}>
-        <Text style={styles.cardTitle}>Average Progress</Text>
-        <View style={styles.progressBarContainer}>
-          <View style={styles.progressBarBackground}>
+        
+        <View style={styles.progressContainer}>
+          <View style={styles.progressBar}>
             <View
               style={[
-                styles.progressBarFill,
+                styles.progressFill,
                 {
-                  width: `${averageProgress}%`,
-                  backgroundColor: COLORS.info,
+                  width: `${analytics.completionRate}%`,
+                  backgroundColor: COLORS.success,
                 },
               ]}
             />
           </View>
-          <Text style={styles.percentageText}>{averageProgress}%</Text>
+          <Text style={styles.progressValue}>{analytics.completionRate}%</Text>
         </View>
-      </Card>
 
-      <Card style={styles.card}>
-        <Text style={styles.cardTitle}>Priority Breakdown</Text>
-        <View style={styles.priorityList}>
-          {Object.entries(priorityBreakdown).map(([key, count]) => (
-            <View key={key} style={styles.priorityItem}>
-              <View style={styles.priorityLeft}>
-                <View
-                  style={[
-                    styles.priorityDot,
-                    {
-                      backgroundColor:
-                        PRIORITIES[key.toUpperCase()]?.color || COLORS.textSecondary,
-                    },
-                  ]}
-                />
-                <Text style={styles.priorityLabel}>
-                  {PRIORITIES[key.toUpperCase()]?.label || key}
-                </Text>
-              </View>
-              <Text style={styles.priorityCount}>{count}</Text>
-            </View>
-          ))}
-        </View>
-      </Card>
-
-      {totalTasks === 0 && (
-        <Card style={styles.card}>
-          <Text style={styles.emptyText}>
-            No tasks created yet. Start creating tasks to see analytics!
+        <View style={styles.progressDetails}>
+          <Text style={styles.progressText}>
+            {analytics.completed} of {analytics.total} tasks completed
           </Text>
-        </Card>
-      )}
+        </View>
+      </Card>
+
+      {/* Average Progress Card */}
+      <Card style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Icon name="chart-arc" size={28} color={COLORS.info} />
+          <Text style={styles.cardTitle}>Average Progress</Text>
+        </View>
+
+        <View style={styles.avgProgressContainer}>
+          <Text style={styles.avgProgressValue}>{analytics.avgProgress}%</Text>
+          <Text style={styles.avgProgressLabel}>across all tasks</Text>
+        </View>
+      </Card>
+
+      {/* Priority Breakdown Card */}
+      <Card style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Icon name="flag-variant-outline" size={28} color={COLORS.warning} />
+          <Text style={styles.cardTitle}>Priority Breakdown</Text>
+        </View>
+
+        <View style={styles.priorityList}>
+          <View style={styles.priorityItem}>
+            <View style={styles.priorityLabel}>
+              <View style={[styles.priorityDot, { backgroundColor: COLORS.error }]} />
+              <Text style={styles.priorityText}>Urgent</Text>
+            </View>
+            <Text style={styles.priorityValue}>
+              {analytics.priorityBreakdown.urgent}
+            </Text>
+          </View>
+
+          <View style={styles.priorityItem}>
+            <View style={styles.priorityLabel}>
+              <View style={[styles.priorityDot, { backgroundColor: COLORS.warning }]} />
+              <Text style={styles.priorityText}>High</Text>
+            </View>
+            <Text style={styles.priorityValue}>
+              {analytics.priorityBreakdown.high}
+            </Text>
+          </View>
+
+          <View style={styles.priorityItem}>
+            <View style={styles.priorityLabel}>
+              <View style={[styles.priorityDot, { backgroundColor: COLORS.info }]} />
+              <Text style={styles.priorityText}>Medium</Text>
+            </View>
+            <Text style={styles.priorityValue}>
+              {analytics.priorityBreakdown.medium}
+            </Text>
+          </View>
+
+          <View style={styles.priorityItem}>
+            <View style={styles.priorityLabel}>
+              <View style={[styles.priorityDot, { backgroundColor: COLORS.success }]} />
+              <Text style={styles.priorityText}>Low</Text>
+            </View>
+            <Text style={styles.priorityValue}>
+              {analytics.priorityBreakdown.low}
+            </Text>
+          </View>
+        </View>
+      </Card>
+
+      {/* Alerts Card */}
+      <Card style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Icon name="alert-circle-outline" size={28} color={COLORS.error} />
+          <Text style={styles.cardTitle}>Alerts</Text>
+        </View>
+
+        <View style={styles.alertsList}>
+          {analytics.overdue > 0 && (
+            <View style={[styles.alertItem, styles.alertDanger]}>
+              <Icon name="alert" size={20} color={COLORS.error} />
+              <Text style={styles.alertText}>
+                {analytics.overdue} task{analytics.overdue > 1 ? 's' : ''} overdue
+              </Text>
+            </View>
+          )}
+
+          {analytics.dueSoon > 0 && (
+            <View style={[styles.alertItem, styles.alertWarning]}>
+              <Icon name="clock-alert-outline" size={20} color={COLORS.warning} />
+              <Text style={styles.alertText}>
+                {analytics.dueSoon} task{analytics.dueSoon > 1 ? 's' : ''} due within 3 days
+              </Text>
+            </View>
+          )}
+
+          {analytics.overdue === 0 && analytics.dueSoon === 0 && (
+            <View style={styles.alertItem}>
+              <Icon name="check-circle-outline" size={20} color={COLORS.success} />
+              <Text style={[styles.alertText, { color: COLORS.success }]}>
+                All tasks are on track!
+              </Text>
+            </View>
+          )}
+        </View>
+      </Card>
     </ScrollView>
   );
 };
@@ -148,69 +224,88 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  scrollContent: {
-    padding: 16,
-  },
-  pageTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: 16,
-  },
   card: {
+    margin: 16,
+    marginBottom: 8,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 16,
   },
   cardTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: COLORS.text,
-    marginBottom: 16,
+    marginLeft: 12,
   },
-  statGrid: {
+  statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 16,
   },
   statItem: {
     flex: 1,
     minWidth: '45%',
     alignItems: 'center',
-    padding: 16,
+    padding: 12,
     backgroundColor: COLORS.background,
     borderRadius: 8,
   },
-  statNumber: {
+  statValue: {
     fontSize: 32,
     fontWeight: 'bold',
-    marginBottom: 4,
+    color: COLORS.primary,
   },
   statLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.textSecondary,
+    marginTop: 4,
     textAlign: 'center',
   },
-  progressBarContainer: {
+  progressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  progressBarBackground: {
+  progressBar: {
     flex: 1,
-    height: 12,
+    height: 24,
     backgroundColor: COLORS.border,
-    borderRadius: 6,
+    borderRadius: 12,
     overflow: 'hidden',
   },
-  progressBarFill: {
+  progressFill: {
     height: '100%',
-    backgroundColor: COLORS.success,
-    borderRadius: 6,
+    borderRadius: 12,
   },
-  percentageText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text,
+  progressValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.success,
     minWidth: 50,
+  },
+  progressDetails: {
+    marginTop: 12,
+  },
+  progressText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  avgProgressContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  avgProgressValue: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: COLORS.info,
+  },
+  avgProgressLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 8,
   },
   priorityList: {
     gap: 12,
@@ -220,30 +315,54 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
   },
-  priorityLeft: {
+  priorityLabel: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
   },
   priorityDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
+    marginRight: 8,
   },
-  priorityLabel: {
+  priorityText: {
     fontSize: 16,
     color: COLORS.text,
   },
-  priorityCount: {
+  priorityValue: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: COLORS.text,
   },
-  emptyText: {
+  alertsList: {
+    gap: 12,
+  },
+  alertItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+  },
+  alertDanger: {
+    backgroundColor: `${COLORS.error}10`,
+    borderWidth: 1,
+    borderColor: COLORS.error,
+  },
+  alertWarning: {
+    backgroundColor: `${COLORS.warning}10`,
+    borderWidth: 1,
+    borderColor: COLORS.warning,
+  },
+  alertText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
+    color: COLORS.text,
+    marginLeft: 8,
+    flex: 1,
   },
 });
 

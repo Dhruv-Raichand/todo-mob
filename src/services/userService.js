@@ -16,6 +16,7 @@ export const userService = {
         ...doc.data(),
       }));
     } catch (error) {
+      console.error('Get all students error:', error);
       throw error;
     }
   },
@@ -29,6 +30,7 @@ export const userService = {
         .get();
       return userDoc.exists ? { id: userDoc.id, ...userDoc.data() } : null;
     } catch (error) {
+      console.error('Get user by ID error:', error);
       throw error;
     }
   },
@@ -48,5 +50,35 @@ export const userService = {
           console.error('Error listening to user:', error);
         }
       );
+  },
+
+  // Search students by name or email
+  searchStudents: async searchText => {
+    try {
+      const studentsSnapshot = await firestore()
+        .collection(COLLECTIONS.USERS)
+        .where('role', '==', ROLES.STUDENT)
+        .get();
+
+      const students = studentsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Filter by search text
+      if (searchText) {
+        const lowerSearch = searchText.toLowerCase();
+        return students.filter(
+          student =>
+            student.name.toLowerCase().includes(lowerSearch) ||
+            student.email.toLowerCase().includes(lowerSearch)
+        );
+      }
+
+      return students;
+    } catch (error) {
+      console.error('Search students error:', error);
+      throw error;
+    }
   },
 };

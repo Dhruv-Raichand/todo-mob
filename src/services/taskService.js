@@ -16,6 +16,7 @@ export const taskService = {
         });
       return taskRef.id;
     } catch (error) {
+      console.error('Create task error:', error);
       throw error;
     }
   },
@@ -29,11 +30,12 @@ export const taskService = {
         .get();
       return taskDoc.exists ? { id: taskDoc.id, ...taskDoc.data() } : null;
     } catch (error) {
+      console.error('Get task error:', error);
       throw error;
     }
   },
 
-  // Get all tasks for teacher (Real-time listener)
+  // Subscribe to teacher's tasks (Real-time listener)
   subscribeToTeacherTasks: (teacherId, callback) => {
     return firestore()
       .collection(COLLECTIONS.TASKS)
@@ -53,7 +55,7 @@ export const taskService = {
       );
   },
 
-  // Get tasks assigned to student (Real-time listener)
+  // Subscribe to student's tasks (Real-time listener)
   subscribeToStudentTasks: (studentId, callback) => {
     return firestore()
       .collection(COLLECTIONS.TASKS)
@@ -84,6 +86,7 @@ export const taskService = {
           updatedAt: firestore.FieldValue.serverTimestamp(),
         });
     } catch (error) {
+      console.error('Update task error:', error);
       throw error;
     }
   },
@@ -99,6 +102,7 @@ export const taskService = {
           updatedAt: firestore.FieldValue.serverTimestamp(),
         });
     } catch (error) {
+      console.error('Update task status error:', error);
       throw error;
     }
   },
@@ -125,6 +129,7 @@ export const taskService = {
         .doc(taskId)
         .update(updates);
     } catch (error) {
+      console.error('Update task progress error:', error);
       throw error;
     }
   },
@@ -134,6 +139,7 @@ export const taskService = {
     try {
       await firestore().collection(COLLECTIONS.TASKS).doc(taskId).delete();
     } catch (error) {
+      console.error('Delete task error:', error);
       throw error;
     }
   },
@@ -152,6 +158,7 @@ export const taskService = {
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
     } catch (error) {
+      console.error('Add comment error:', error);
       throw error;
     }
   },
@@ -187,6 +194,7 @@ export const taskService = {
         .doc(commentId)
         .delete();
     } catch (error) {
+      console.error('Delete comment error:', error);
       throw error;
     }
   },

@@ -6,23 +6,26 @@ import {
   ScrollView,
   Alert,
   TouchableOpacity,
-  Platform,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
+import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
-import { taskService } from '../../services/taskService';
+import { useTasks } from '../../hooks/useTasks';
 import { userService } from '../../services/userService';
 import { COLORS } from '../../constants/colors';
 import { PRIORITY_LIST } from '../../constants/priorities';
+import { formatDate } from '../../utils/dateUtils';
 
 const CreateTaskScreen = ({ navigation }) => {
   const { user } = useAuth();
+  const { createTask } = useTasks();
   const [students, setStudents] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingStudents, setLoadingStudents] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -30,7 +33,7 @@ const CreateTaskScreen = ({ navigation }) => {
     description: '',
     assignedTo: '',
     priority: 'medium',
-    deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week from now
+    deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
   });
 
   const [errors, setErrors] = useState({});
@@ -43,9 +46,14 @@ const CreateTaskScreen = ({ navigation }) => {
     try {
       const studentsList = await userService.getAllStudents();
       setStudents(studentsList);
+      if (studentsList.length > 0) {
+        setFormData(prev => ({ ...prev, assignedTo: studentsList[0].id }));
+      }
     } catch (error) {
-      console.error('Error loading students:', error);
       Alert.alert('Error', 'Failed to load students');
+      console.error(error);
+    } finally {
+      setLoadingStudents(false);
     }
   };
 
@@ -54,7 +62,7 @@ const CreateTaskScreen = ({ navigation }) => {
     setErrors(prev => ({ ...prev, [field]: '' }));
   };
 
-  const validateForm = () => {
+  const validate = () => {
     const newErrors = {};
 
     if (!formData.title.trim()) {
@@ -77,47 +85,61 @@ const CreateTaskScreen = ({ navigation }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleCreateTask = async () => {
-    if (!validateForm()) return;
+  const handleSubmit = async () => {
+    if (!validate()) return;
 
-    setLoading(true);
+    if (students.length === 0) {
+      Alert.alert('Error', 'No students available to assign tasks');
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      const taskData = {
+      await createTask({
         title: formData.title.trim(),
         description: formData.description.trim(),
         assignedTo: formData.assignedTo,
         priority: formData.priority,
         deadline: formData.deadline,
         teacherId: user.uid,
-        progress: 0,
-      };
+      });
 
-      await taskService.createTask(taskData);
       Alert.alert('Success', 'Task created successfully!', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (error) {
-      console.error('Error creating task:', error);
       Alert.alert('Error', 'Failed to create task');
+      console.error(error);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
-  const onDateChange = (event, selectedDate) => {
-    setShowDatePicker(Platform.OS === 'ios');
+  const handleDateChange = (event, selectedDate) => {
+    setShowDatePicker(false);
     if (selectedDate) {
       handleChange('deadline', selectedDate);
     }
   };
 
+  if (loadingStudents) {
+    return <LoadingSpinner message="Loading students..." />;
+  }
+
+  if (students.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>
+          No students found. Students need to register first.
+        </Text>
+        <Button title="Go Back" onPress={() => navigation.goBack()} />
+      </View>
+    );
+  }
+
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Card>
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+      <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Task Details</Text>
 
         <Input
@@ -126,20 +148,21 @@ const CreateTaskScreen = ({ navigation }) => {
           value={formData.title}
           onChangeText={text => handleChange('title', text)}
           error={errors.title}
+          icon="file-document-outline"
         />
 
         <Input
           label="Description *"
-          placeholder="Enter task description"
+          placeholder="Describe the task..."
           value={formData.description}
           onChangeText={text => handleChange('description', text)}
           multiline
           numberOfLines={4}
-          style={styles.textArea}
           error={errors.description}
+          icon="text"
         />
 
-        <View style={styles.inputContainer}>
+        <View style={styles.pickerContainer}>
           <Text style={styles.label}>Assign to Student *</Text>
           <View style={styles.pickerWrapper}>
             <Picker
@@ -147,23 +170,22 @@ const CreateTaskScreen = ({ navigation }) => {
               onValueChange={value => handleChange('assignedTo', value)}
               style={styles.picker}
             >
-              <Picker.Item label="Select a student" value="" />
               {students.map(student => (
                 <Picker.Item
                   key={student.id}
-                  label={student.name}
+                  label={`${student.name} (${student.email})`}
                   value={student.id}
                 />
               ))}
             </Picker>
           </View>
           {errors.assignedTo && (
-            <Text style={styles.error}>{errors.assignedTo}</Text>
+            <Text style={styles.errorText}>{errors.assignedTo}</Text>
           )}
         </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Priority *</Text>
+        <View style={styles.pickerContainer}>
+          <Text style={styles.label}>Priority</Text>
           <View style={styles.pickerWrapper}>
             <Picker
               selectedValue={formData.priority}
@@ -173,7 +195,7 @@ const CreateTaskScreen = ({ navigation }) => {
               {PRIORITY_LIST.map(priority => (
                 <Picker.Item
                   key={priority.value}
-                  label={priority.label}
+                  label={`${priority.icon} ${priority.label}`}
                   value={priority.value}
                 />
               ))}
@@ -181,22 +203,16 @@ const CreateTaskScreen = ({ navigation }) => {
           </View>
         </View>
 
-        <View style={styles.inputContainer}>
+        <View style={styles.dateContainer}>
           <Text style={styles.label}>Deadline *</Text>
           <TouchableOpacity
             style={styles.dateButton}
             onPress={() => setShowDatePicker(true)}
           >
-            <Text style={styles.dateText}>
-              {formData.deadline.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </Text>
+            <Text style={styles.dateText}>{formatDate(formData.deadline)}</Text>
           </TouchableOpacity>
           {errors.deadline && (
-            <Text style={styles.error}>{errors.deadline}</Text>
+            <Text style={styles.errorText}>{errors.deadline}</Text>
           )}
         </View>
 
@@ -204,24 +220,24 @@ const CreateTaskScreen = ({ navigation }) => {
           <DateTimePicker
             value={formData.deadline}
             mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={onDateChange}
+            display="default"
+            onChange={handleDateChange}
             minimumDate={new Date()}
           />
         )}
 
-        <View style={styles.buttonContainer}>
-          <Button
-            title="Create Task"
-            onPress={handleCreateTask}
-            loading={loading}
-          />
-          <Button
-            title="Cancel"
-            onPress={() => navigation.goBack()}
-            variant="outline"
-          />
-        </View>
+        <Button
+          title="Create Task"
+          onPress={handleSubmit}
+          loading={submitting}
+          style={styles.submitButton}
+        />
+
+        <Button
+          title="Cancel"
+          onPress={() => navigation.goBack()}
+          variant="outline"
+        />
       </Card>
     </ScrollView>
   );
@@ -232,56 +248,67 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  scrollContent: {
-    padding: 16,
+  card: {
+    margin: 16,
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 20,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+    marginBottom: 16,
   },
-  inputContainer: {
+  pickerContainer: {
     marginBottom: 16,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 8,
     color: COLORS.text,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
+    marginBottom: 8,
   },
   pickerWrapper: {
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 8,
-    backgroundColor: COLORS.surface,
   },
   picker: {
     height: 50,
   },
+  dateContainer: {
+    marginBottom: 16,
+  },
   dateButton: {
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 8,
-    padding: 12,
-    backgroundColor: COLORS.surface,
+    padding: 14,
   },
   dateText: {
     fontSize: 16,
     color: COLORS.text,
   },
-  error: {
-    color: COLORS.error,
+  errorText: {
     fontSize: 12,
+    color: COLORS.error,
     marginTop: 4,
   },
-  buttonContainer: {
+  submitButton: {
     marginTop: 8,
-    gap: 8,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: COLORS.background,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 20,
   },
 });
 

@@ -3,11 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   KeyboardAvoidingView,
   Platform,
   Alert,
-  ScrollView,
-  TouchableOpacity,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import Input from '../../components/common/Input';
@@ -15,10 +14,15 @@ import Button from '../../components/common/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { COLORS } from '../../constants/colors';
 import { ROLES } from '../../constants/roles';
-import { validateEmail, validatePassword } from '../../utils/validationUtils';
-import { getErrorMessage } from '../../utils/validationUtils';
+import {
+  validateEmail,
+  validatePassword,
+  validateRequired,
+  getErrorMessage,
+} from '../../utils/validationUtils';
 
 const RegisterScreen = ({ navigation }) => {
+  const { register } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -26,35 +30,34 @@ const RegisterScreen = ({ navigation }) => {
     confirmPassword: '',
     role: ROLES.STUDENT,
   });
-  const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  const { register } = useAuth();
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setErrors(prev => ({ ...prev, [field]: '' }));
   };
 
-  const validateForm = () => {
+  const validate = () => {
     const newErrors = {};
 
-    if (!formData.name.trim()) {
+    if (!validateRequired(formData.name)) {
       newErrors.name = 'Name is required';
     }
 
-    if (!formData.email) {
+    if (!validateRequired(formData.email)) {
       newErrors.email = 'Email is required';
     } else if (!validateEmail(formData.email)) {
-      newErrors.email = 'Invalid email address';
+      newErrors.email = 'Please enter a valid email';
     }
 
-    if (!formData.password) {
+    if (!validateRequired(formData.password)) {
       newErrors.password = 'Password is required';
     } else if (!validatePassword(formData.password)) {
       newErrors.password = 'Password must be at least 6 characters';
     }
 
-    if (!formData.confirmPassword) {
+    if (!validateRequired(formData.confirmPassword)) {
       newErrors.confirmPassword = 'Please confirm your password';
     } else if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
@@ -65,7 +68,7 @@ const RegisterScreen = ({ navigation }) => {
   };
 
   const handleRegister = async () => {
-    if (!validateForm()) return;
+    if (!validate()) return;
 
     setLoading(true);
     try {
@@ -80,7 +83,7 @@ const RegisterScreen = ({ navigation }) => {
         formData.role === ROLES.TEACHER
           ? 'Account created! Waiting for admin approval.'
           : 'Account created successfully!',
-        [{ text: 'OK' }]
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (error) {
       Alert.alert('Registration Failed', getErrorMessage(error));
@@ -91,95 +94,88 @@ const RegisterScreen = ({ navigation }) => {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.content}>
-          <View style={styles.headerContainer}>
-            <Text style={styles.title}>Create Account 🚀</Text>
-            <Text style={styles.subtitle}>Join TaskMaster today</Text>
-          </View>
+        <View style={styles.header}>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Join TaskMaster today!</Text>
+        </View>
 
-          <View style={styles.formContainer}>
-            <Input
-              label="Full Name"
-              placeholder="Enter your full name"
-              value={formData.name}
-              onChangeText={text => handleChange('name', text)}
-              autoCapitalize="words"
-              error={errors.name}
-            />
+        <View style={styles.form}>
+          <Input
+            label="Full Name"
+            placeholder="Enter your name"
+            value={formData.name}
+            onChangeText={text => handleChange('name', text)}
+            error={errors.name}
+            icon="account-outline"
+          />
 
-            <Input
-              label="Email Address"
-              placeholder="Enter your email"
-              value={formData.email}
-              onChangeText={text => handleChange('email', text)}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              error={errors.email}
-            />
+          <Input
+            label="Email Address"
+            placeholder="Enter your email"
+            value={formData.email}
+            onChangeText={text => handleChange('email', text)}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            error={errors.email}
+            icon="email-outline"
+          />
 
-            <Input
-              label="Password"
-              placeholder="Create a password"
-              value={formData.password}
-              onChangeText={text => handleChange('password', text)}
-              secureTextEntry
-              error={errors.password}
-            />
+          <Input
+            label="Password"
+            placeholder="Create a password"
+            value={formData.password}
+            onChangeText={text => handleChange('password', text)}
+            secureTextEntry
+            autoCapitalize="none"
+            error={errors.password}
+            icon="lock-outline"
+          />
 
-            <Input
-              label="Confirm Password"
-              placeholder="Confirm your password"
-              value={formData.confirmPassword}
-              onChangeText={text => handleChange('confirmPassword', text)}
-              secureTextEntry
-              error={errors.confirmPassword}
-            />
+          <Input
+            label="Confirm Password"
+            placeholder="Re-enter your password"
+            value={formData.confirmPassword}
+            onChangeText={text => handleChange('confirmPassword', text)}
+            secureTextEntry
+            autoCapitalize="none"
+            error={errors.confirmPassword}
+            icon="lock-check-outline"
+          />
 
-            <View style={styles.pickerContainer}>
-              <Text style={styles.label}>I am a:</Text>
-              <View style={styles.pickerWrapper}>
-                <Picker
-                  selectedValue={formData.role}
-                  onValueChange={value => handleChange('role', value)}
-                  style={styles.picker}
-                >
-                  <Picker.Item label="Student" value={ROLES.STUDENT} />
-                  <Picker.Item label="Teacher" value={ROLES.TEACHER} />
-                </Picker>
-              </View>
-            </View>
-
-            {formData.role === ROLES.TEACHER && (
-              <View style={styles.noteContainer}>
-                <Text style={styles.noteText}>
-                  ⚠️ Teacher accounts require admin approval before you can
-                  create tasks.
-                </Text>
-              </View>
-            )}
-
-            <Button
-              title="Create Account"
-              onPress={handleRegister}
-              loading={loading}
-              style={styles.registerButton}
-            />
-
-            <View style={styles.loginContainer}>
-              <Text style={styles.loginText}>Already have an account? </Text>
-              <TouchableOpacity onPress={() => navigation.goBack()}>
-                <Text style={styles.loginLink}>Sign In</Text>
-              </TouchableOpacity>
+          <View style={styles.pickerContainer}>
+            <Text style={styles.label}>I am a:</Text>
+            <View style={styles.pickerWrapper}>
+              <Picker
+                selectedValue={formData.role}
+                onValueChange={value => handleChange('role', value)}
+                style={styles.picker}
+              >
+                <Picker.Item label="Student" value={ROLES.STUDENT} />
+                <Picker.Item label="Teacher" value={ROLES.TEACHER} />
+              </Picker>
             </View>
           </View>
+
+          <Button
+            title="Register"
+            onPress={handleRegister}
+            loading={loading}
+            style={styles.registerButton}
+          />
+
+          <Button
+            title="Already have an account? Login"
+            onPress={() => navigation.goBack()}
+            variant="outline"
+          />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -193,27 +189,26 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-  },
-  content: {
-    flex: 1,
     padding: 24,
-    paddingTop: 40,
   },
-  headerContainer: {
+  header: {
+    marginTop: 20,
     marginBottom: 32,
+    alignItems: 'center',
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: COLORS.primary,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
     color: COLORS.textSecondary,
+    textAlign: 'center',
   },
-  formContainer: {
-    marginBottom: 24,
+  form: {
+    width: '100%',
   },
   pickerContainer: {
     marginBottom: 16,
@@ -221,45 +216,20 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 8,
     color: COLORS.text,
+    marginBottom: 8,
   },
   pickerWrapper: {
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 8,
-    backgroundColor: COLORS.surface,
   },
   picker: {
     height: 50,
   },
-  noteContainer: {
-    backgroundColor: '#FFF3E0',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  noteText: {
-    fontSize: 13,
-    color: '#E65100',
-    lineHeight: 18,
-  },
   registerButton: {
     marginTop: 8,
-  },
-  loginContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 24,
-  },
-  loginText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  loginLink: {
-    fontSize: 14,
-    color: COLORS.primary,
-    fontWeight: '600',
   },
 });
 

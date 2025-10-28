@@ -10,10 +10,10 @@ export const getDeadlineColor = deadline => {
   const now = new Date();
   const diffHours = (deadlineDate - now) / (1000 * 60 * 60);
 
-  if (diffHours < 0) return COLORS.error; // Red - Overdue
-  if (diffHours <= 24) return '#FF9800'; // Orange - Very soon
-  if (diffHours <= 48) return COLORS.warning; // Yellow - Soon
-  return COLORS.success; // Green - Plenty of time
+  if (diffHours < 0) return COLORS.error;        // Red - Overdue
+  if (diffHours <= 24) return COLORS.warning;    // Amber - Very soon
+  if (diffHours <= 48) return COLORS.warning;    // Amber - Soon
+  return COLORS.success;                          // Green - Safe
 };
 
 export const getProgressColor = progress => {
@@ -21,4 +21,14 @@ export const getProgressColor = progress => {
   if (progress < 50) return COLORS.warning;
   if (progress < 100) return COLORS.info;
   return COLORS.success;
+};
+
+export const getStatusColor = status => {
+  const STATUS_COLORS = {
+    not_started: COLORS.textSecondary,
+    in_progress: COLORS.info,
+    completed: COLORS.success,
+    overdue: COLORS.error,
+  };
+  return STATUS_COLORS[status] || COLORS.textSecondary;
 };

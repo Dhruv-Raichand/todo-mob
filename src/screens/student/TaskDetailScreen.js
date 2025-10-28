@@ -4,205 +4,187 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Alert,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Slider from '@react-native-community/slider';
+import Card from '../../components/common/Card';
+import Button from '../../components/common/Button';
+import CommentItem from '../../components/comment/CommentItem';
+import CommentInput from '../../components/comment/CommentInput';
+import PriorityBadge from '../../components/task/PriorityBadge';
+import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
 import { useTaskDetail } from '../../hooks/useTaskDetail';
 import { taskService } from '../../services/taskService';
-import LoadingSpinner from '../../components/common/LoadingSpinner';
-import Card from '../../components/common/Card';
-import Button from '../../components/common/Button';
-import PriorityBadge from '../../components/task/PriorityBadge';
-import CommentList from '../../components/comments/CommentList';
-import CommentInput from '../../components/comments/CommentInput';
 import { COLORS } from '../../constants/colors';
-import { TASK_STATUS, STATUS_LABELS } from '../../constants/taskStatus';
 import { formatDate, getTimeRemaining } from '../../utils/dateUtils';
 import { getDeadlineColor, getProgressColor } from '../../utils/colorUtils';
+import { STATUS_LABELS } from '../../constants/taskStatus';
 
 const TaskDetailScreen = ({ route, navigation }) => {
-  const { task: routeTask } = route.params;
+  const { taskId } = route.params;
   const { user, userData } = useAuth();
-  const { task, comments, loading } = useTaskDetail(routeTask.id);
-  const [progressValue, setProgressValue] = useState(routeTask.progress || 0);
+  const { task, comments, loading } = useTaskDetail(taskId);
+  const [progress, setProgress] = useState(0);
   const [updating, setUpdating] = useState(false);
 
-  const currentTask = task || routeTask;
+  React.useEffect(() => {
+    if (task) {
+      setProgress(task.progress || 0);
+    }
+  }, [task]);
 
-  if (loading) {
-    return <LoadingSpinner message="Loading task details..." />;
-  }
-
-  const handleUpdateProgress = async newProgress => {
-    setUpdating(true);
+  const handleUpdateProgress = async () => {
     try {
-      await taskService.updateTaskProgress(currentTask.id, newProgress);
-      setProgressValue(newProgress);
-      Alert.alert('Success', 'Progress updated successfully');
+      setUpdating(true);
+      await taskService.updateTaskProgress(taskId, progress);
+      Alert.alert('Success', 'Progress updated successfully!');
     } catch (error) {
       Alert.alert('Error', 'Failed to update progress');
+      console.error(error);
     } finally {
       setUpdating(false);
     }
   };
 
-  const handleUpdateStatus = async newStatus => {
+  const handleAddComment = async text => {
     try {
-      await taskService.updateTaskStatus(currentTask.id, newStatus);
-      Alert.alert('Success', 'Status updated successfully');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update status');
-    }
-  };
-
-  const handleAddComment = async commentText => {
-    try {
-      await taskService.addComment(
-        currentTask.id,
-        user.uid,
-        userData.name,
-        commentText
-      );
+      await taskService.addComment(taskId, user.uid, userData.name, text);
     } catch (error) {
       Alert.alert('Error', 'Failed to add comment');
+      console.error(error);
     }
   };
 
-  const handleDeleteComment = async commentId => {
-    Alert.alert('Delete Comment', 'Are you sure you want to delete this comment?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await taskService.deleteComment(currentTask.id, commentId);
-          } catch (error) {
-            Alert.alert('Error', 'Failed to delete comment');
-          }
-        },
-      },
-    ]);
-  };
+  if (loading) {
+    return <LoadingSpinner message="Loading task details..." />;
+  }
 
-  const deadlineColor = getDeadlineColor(currentTask.deadline);
-  const progressColor = getProgressColor(currentTask.progress || 0);
+  if (!task) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Task not found</Text>
+        <Button title="Go Back" onPress={() => navigation.goBack()} />
+      </View>
+    );
+  }
+
+  const deadlineColor = getDeadlineColor(task.deadline);
+  const progressColor = getProgressColor(progress);
+  const hasProgressChanged = progress !== task.progress;
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView style={styles.scrollView}>
+        {/* Header Card */}
         <Card style={styles.headerCard}>
           <View style={styles.headerRow}>
-            <Text style={styles.title}>{currentTask.title}</Text>
-            <PriorityBadge priority={currentTask.priority} />
+            <Text style={styles.title}>{task.title}</Text>
+            <PriorityBadge priority={task.priority} />
           </View>
 
-          {currentTask.description && (
-            <Text style={styles.description}>{currentTask.description}</Text>
+          {task.description && (
+            <Text style={styles.description}>{task.description}</Text>
           )}
 
+          {/* Deadline Info */}
           <View style={styles.infoRow}>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Status</Text>
-              <Text style={styles.infoValue}>
-                {STATUS_LABELS[currentTask.status] || 'Not Started'}
-              </Text>
-            </View>
-
-            <View style={styles.infoItem}>
+            <Icon name="clock-outline" size={20} color={deadlineColor} />
+            <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Deadline</Text>
               <Text style={[styles.infoValue, { color: deadlineColor }]}>
-                {formatDate(currentTask.deadline)}
+                {formatDate(task.deadline)}
               </Text>
-              <Text style={styles.timeRemaining}>
-                {getTimeRemaining(currentTask.deadline)}
+              <Text style={[styles.timeRemaining, { color: deadlineColor }]}>
+                {getTimeRemaining(task.deadline)}
+              </Text>
+            </View>
+          </View>
+
+          {/* Status */}
+          <View style={styles.infoRow}>
+            <Icon name="information-outline" size={20} color={progressColor} />
+            <View style={styles.infoContent}>
+              <Text style={styles.infoLabel}>Status</Text>
+              <Text style={[styles.infoValue, { color: progressColor }]}>
+                {STATUS_LABELS[task.status]}
               </Text>
             </View>
           </View>
         </Card>
 
+        {/* Progress Card */}
         <Card style={styles.progressCard}>
-          <Text style={styles.sectionTitle}>Progress</Text>
-          <View style={styles.progressBar}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${currentTask.progress || 0}%`,
-                  backgroundColor: progressColor,
-                },
-              ]}
-            />
+          <Text style={styles.sectionTitle}>Update Progress</Text>
+          
+          <View style={styles.progressHeader}>
+            <Text style={styles.progressLabel}>Current Progress</Text>
+            <Text style={[styles.progressValue, { color: progressColor }]}>
+              {progress}%
+            </Text>
           </View>
-          <Text style={styles.progressText}>
-            {currentTask.progress || 0}% Complete
-          </Text>
 
-          <Text style={styles.updateLabel}>Update Progress:</Text>
-          <View style={styles.progressButtons}>
-            {[0, 25, 50, 75, 100].map(value => (
-              <TouchableOpacity
-                key={value}
+          <View style={styles.progressBarContainer}>
+            <View style={styles.progressBar}>
+              <View
                 style={[
-                  styles.progressButton,
-                  currentTask.progress === value && styles.progressButtonActive,
+                  styles.progressFill,
+                  {
+                    width: `${progress}%`,
+                    backgroundColor: progressColor,
+                  },
                 ]}
-                onPress={() => handleUpdateProgress(value)}
-                disabled={updating}
-              >
-                <Text
-                  style={[
-                    styles.progressButtonText,
-                    currentTask.progress === value &&
-                      styles.progressButtonTextActive,
-                  ]}
-                >
-                  {value}%
-                </Text>
-              </TouchableOpacity>
-            ))}
+              />
+            </View>
           </View>
-        </Card>
 
-        <Card style={styles.statusCard}>
-          <Text style={styles.sectionTitle}>Update Status</Text>
-          <View style={styles.statusButtons}>
-            <Button
-              title="Mark In Progress"
-              onPress={() => handleUpdateStatus(TASK_STATUS.IN_PROGRESS)}
-              variant={
-                currentTask.status === TASK_STATUS.IN_PROGRESS
-                  ? 'primary'
-                  : 'outline'
-              }
-              style={styles.statusButton}
-            />
-            <Button
-              title="Mark Completed"
-              onPress={() => handleUpdateStatus(TASK_STATUS.COMPLETED)}
-              variant={
-                currentTask.status === TASK_STATUS.COMPLETED
-                  ? 'primary'
-                  : 'outline'
-              }
-              style={styles.statusButton}
-            />
-          </View>
-        </Card>
-
-        <Card style={styles.commentsCard}>
-          <Text style={styles.sectionTitle}>
-            Comments ({comments.length})
-          </Text>
-          <CommentList
-            comments={comments}
-            onDeleteComment={handleDeleteComment}
+          <Slider
+            style={styles.slider}
+            minimumValue={0}
+            maximumValue={100}
+            step={5}
+            value={progress}
+            onValueChange={setProgress}
+            minimumTrackTintColor={progressColor}
+            maximumTrackTintColor={COLORS.border}
+            thumbTintColor={progressColor}
           />
+
+          {hasProgressChanged && (
+            <Button
+              title="Save Progress"
+              onPress={handleUpdateProgress}
+              loading={updating}
+              style={styles.updateButton}
+            />
+          )}
+        </Card>
+
+        {/* Comments Section */}
+        <Card style={styles.commentsCard}>
+          <View style={styles.commentsHeader}>
+            <Icon name="comment-text-outline" size={24} color={COLORS.primary} />
+            <Text style={styles.sectionTitle}>
+              Comments ({comments.length})
+            </Text>
+          </View>
+
+          {comments.length === 0 ? (
+            <Text style={styles.noComments}>No comments yet</Text>
+          ) : (
+            <View style={styles.commentsList}>
+              {comments.map(comment => (
+                <CommentItem key={comment.id} comment={comment} />
+              ))}
+            </View>
+          )}
         </Card>
       </ScrollView>
 
-      <CommentInput onSubmit={handleAddComment} />
+      {/* Comment Input */}
+      <CommentInput onSend={handleAddComment} />
     </View>
   );
 };
@@ -212,11 +194,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  scrollContent: {
-    padding: 16,
+  scrollView: {
+    flex: 1,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 18,
+    color: COLORS.textSecondary,
+    marginBottom: 20,
   },
   headerCard: {
-    marginBottom: 16,
+    margin: 16,
   },
   headerRow: {
     flexDirection: 'row',
@@ -225,29 +218,33 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   title: {
+    flex: 1,
     fontSize: 22,
     fontWeight: 'bold',
     color: COLORS.text,
-    flex: 1,
     marginRight: 12,
   },
   description: {
-    fontSize: 15,
+    fontSize: 16,
     color: COLORS.textSecondary,
-    lineHeight: 22,
+    lineHeight: 24,
     marginBottom: 16,
   },
   infoRow: {
     flexDirection: 'row',
-    gap: 20,
+    alignItems: 'flex-start',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
   },
-  infoItem: {
+  infoContent: {
     flex: 1,
+    marginLeft: 12,
   },
   infoLabel: {
     fontSize: 12,
     color: COLORS.textSecondary,
-    textTransform: 'uppercase',
     marginBottom: 4,
   },
   infoValue: {
@@ -256,77 +253,72 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   timeRemaining: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
+    fontSize: 14,
+    marginTop: 4,
+    fontWeight: '500',
   },
   progressCard: {
+    marginHorizontal: 16,
     marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: COLORS.text,
-    marginBottom: 12,
+    marginLeft: 8,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  progressLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  progressValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  progressBarContainer: {
+    marginBottom: 8,
   },
   progressBar: {
-    height: 10,
+    height: 12,
     backgroundColor: COLORS.border,
-    borderRadius: 5,
+    borderRadius: 6,
     overflow: 'hidden',
-    marginBottom: 8,
   },
   progressFill: {
     height: '100%',
-    borderRadius: 5,
+    borderRadius: 6,
   },
-  progressText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginBottom: 16,
+  slider: {
+    width: '100%',
+    height: 40,
   },
-  updateLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 8,
-  },
-  progressButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  progressButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-  },
-  progressButtonActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  progressButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  progressButtonTextActive: {
-    color: '#fff',
-  },
-  statusCard: {
-    marginBottom: 16,
-  },
-  statusButtons: {
-    gap: 8,
-  },
-  statusButton: {
-    marginVertical: 0,
+  updateButton: {
+    marginTop: 8,
   },
   commentsCard: {
+    marginHorizontal: 16,
     marginBottom: 16,
+  },
+  commentsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  noComments: {
+    textAlign: 'center',
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    paddingVertical: 20,
+  },
+  commentsList: {
+    marginTop: 8,
   },
 });
 
