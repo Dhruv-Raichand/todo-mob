@@ -21,24 +21,35 @@ const StudentDashboard = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState('all'); // all, active, completed
 
-  const stats = useMemo(() => {
-    const total = tasks.length;
-    const completed = tasks.filter(t => t.progress === 100).length;
-    const inProgress = tasks.filter(t => t.progress > 0 && t.progress < 100).length;
-    const overdue = tasks.filter(t => isOverdue(t.deadline) && t.progress < 100).length;
+const stats = useMemo(() => {
+  const total = tasks.length;
+  const completed = tasks.filter(t => t.myProgress?.progress === 100).length;
+  const inProgress = tasks.filter(
+    t => t.myProgress?.progress > 0 && t.myProgress?.progress < 100
+  ).length;
+  const notStarted = tasks.filter(t => t.myProgress?.progress === 0).length;
+  const overdue = tasks.filter(
+    t => isOverdue(t.deadline) && t.myProgress?.progress < 100
+  ).length;
 
-    return { total, completed, inProgress, overdue };
-  }, [tasks]);
+  return { total, completed, inProgress, notStarted, overdue };
+}, [tasks]);
 
-  const filteredTasks = useMemo(() => {
-    if (filter === 'completed') {
-      return tasks.filter(t => t.progress === 100);
-    }
-    if (filter === 'active') {
-      return tasks.filter(t => t.progress < 100);
-    }
-    return tasks;
-  }, [tasks, filter]);
+
+ const filteredTasks = useMemo(() => {
+  if (filter === 'completed') {
+    return tasks.filter(t => t.myProgress?.progress === 100);
+  }
+  if (filter === 'active') {
+    return tasks.filter(t => t.myProgress?.progress < 100);
+  }
+  if (filter === 'overdue') {
+    return tasks.filter(
+      t => isOverdue(t.deadline) && t.myProgress?.progress < 100
+    );
+  }
+  return tasks;
+}, [tasks, filter]);
 
   const onRefresh = async () => {
     setRefreshing(true);

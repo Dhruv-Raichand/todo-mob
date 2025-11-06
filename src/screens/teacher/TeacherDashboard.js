@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  RefreshControl,
   Alert,
   Modal,
 } from 'react-native';
@@ -29,24 +28,53 @@ const TeacherDashboard = ({ navigation }) => {
   const [showPriorityModal, setShowPriorityModal] = useState(false);
 
   const stats = useMemo(() => {
-    const total = tasks.length;
-    const completed = tasks.filter(t => t.progress === 100).length;
-    const inProgress = tasks.filter(t => t.progress > 0 && t.progress < 100).length;
-    const notStarted = tasks.filter(t => t.progress === 0).length;
-    const overdue = tasks.filter(t => isOverdue(t.deadline) && t.progress < 100).length;
+    if (!tasks || tasks.length === 0) {
+      return { total: 0, completed: 0, inProgress: 0, notStarted: 0, overdue: 0 };
+    }
 
-    return { total, completed, inProgress, notStarted, overdue };
+    const total = tasks.length;
+    let completedCount = 0;
+    let inProgressCount = 0;
+    let notStartedCount = 0;
+    let overdueCount = 0;
+
+    tasks.forEach(task => {
+      const avgProgress = task.stats?.avgProgress || 0;
+      const isTaskOverdue = isOverdue(task.deadline);
+
+      if (avgProgress === 100) {
+        completedCount++;
+      } else if (avgProgress > 0) {
+        inProgressCount++;
+      } else {
+        notStartedCount++;
+      }
+
+      if (isTaskOverdue && avgProgress < 100) {
+        overdueCount++;
+      }
+    });
+
+    return {
+      total,
+      completed: completedCount,
+      inProgress: inProgressCount,
+      notStarted: notStartedCount,
+      overdue: overdueCount,
+    };
   }, [tasks]);
 
   const filteredTasks = useMemo(() => {
+    if (!tasks) return [];
+    
     if (filter === 'completed') {
-      return tasks.filter(t => t.progress === 100);
+      return tasks.filter(t => t.stats?.avgProgress === 100);
     }
     if (filter === 'active') {
-      return tasks.filter(t => t.progress < 100);
+      return tasks.filter(t => t.stats?.avgProgress < 100);
     }
     if (filter === 'overdue') {
-      return tasks.filter(t => isOverdue(t.deadline) && t.progress < 100);
+      return tasks.filter(t => isOverdue(t.deadline) && t.stats?.avgProgress < 100);
     }
     return tasks;
   }, [tasks, filter]);
@@ -58,6 +86,10 @@ const TeacherDashboard = ({ navigation }) => {
 
   const handleTaskPress = task => {
     navigation.navigate('TaskDetail', { taskId: task.id });
+  };
+
+  const handleViewProgress = task => {
+    navigation.navigate('StudentProgress', { taskId: task.id });
   };
 
   const handleEditTask = task => {
@@ -122,6 +154,14 @@ const TeacherDashboard = ({ navigation }) => {
       'Task Options',
       `What would you like to do with "${task.title}"?`,
       [
+        {
+          text: 'View Details',
+          onPress: () => handleTaskPress(task),
+        },
+        {
+          text: 'View Progress',
+          onPress: () => handleViewProgress(task),
+        },
         {
           text: 'Edit',
           onPress: () => handleEditTask(task),
@@ -220,7 +260,7 @@ const TeacherDashboard = ({ navigation }) => {
               filter === 'all' && styles.filterTextActive,
             ]}
           >
-            All
+            All ({tasks?.length || 0})
           </Text>
         </TouchableOpacity>
 
@@ -237,7 +277,7 @@ const TeacherDashboard = ({ navigation }) => {
               filter === 'active' && styles.filterTextActive,
             ]}
           >
-            Active
+            Active ({stats.inProgress + stats.notStarted})
           </Text>
         </TouchableOpacity>
 
@@ -254,7 +294,7 @@ const TeacherDashboard = ({ navigation }) => {
               filter === 'completed' && styles.filterTextActive,
             ]}
           >
-            Done
+            Done ({stats.completed})
           </Text>
         </TouchableOpacity>
       </View>
@@ -264,6 +304,7 @@ const TeacherDashboard = ({ navigation }) => {
         tasks={filteredTasks}
         onTaskPress={handleTaskPress}
         onTaskLongPress={handleTaskLongPress}
+        onViewProgress={handleViewProgress}
         isTeacher={true}
         emptyMessage={
           filter === 'completed'
@@ -415,7 +456,7 @@ const styles = StyleSheet.create({
   filterTab: {
     flex: 1,
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     borderRadius: 8,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
@@ -427,7 +468,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   filterText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: COLORS.textSecondary,
   },

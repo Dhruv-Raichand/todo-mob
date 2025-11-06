@@ -7,19 +7,21 @@ const TaskList = ({
   tasks,
   onTaskPress,
   onTaskLongPress,
+  onViewProgress,
   isTeacher = false,
   emptyMessage = 'No tasks available',
   refreshing = false,
   onRefresh,
 }) => {
- const renderItem = ({ item }) => (
-  <TaskCard
-    task={item}
-    onPress={() => onTaskPress(item)}
-    onLongPress={onTaskLongPress ? () => onTaskLongPress(item) : undefined}
-    isTeacher={isTeacher}
-  />
-);
+  const renderItem = ({ item }) => (
+    <TaskCard
+      task={item}
+      onPress={() => onTaskPress(item)}
+      onLongPress={onTaskLongPress ? () => onTaskLongPress(item) : undefined}
+      onViewProgress={onViewProgress}
+      isTeacher={isTeacher}
+    />
+  );
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
@@ -55,6 +57,7 @@ const TaskList = ({
 const styles = StyleSheet.create({
   listContent: {
     paddingVertical: 8,
+    paddingBottom: 80,
   },
   emptyList: {
     flex: 1,

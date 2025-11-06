@@ -4,6 +4,7 @@ import TeacherDashboard from '../screens/teacher/TeacherDashboard';
 import CreateTaskScreen from '../screens/teacher/CreateTaskScreen';
 import EditTaskScreen from '../screens/teacher/EditTaskScreen';
 import TaskDetailScreen from '../screens/student/TaskDetailScreen';
+import StudentProgressScreen from '../screens/teacher/StudentProgressScreen';
 import AnalyticsScreen from '../screens/teacher/AnalyticsScreen';
 import { COLORS } from '../constants/colors';
 
@@ -41,6 +42,11 @@ const TeacherNavigator = () => {
         name="TaskDetail"
         component={TaskDetailScreen}
         options={{ title: 'Task Details' }}
+      />
+      <Stack.Screen
+        name="StudentProgress"
+        component={StudentProgressScreen}
+        options={{ title: 'Student Progress' }}
       />
       <Stack.Screen
         name="Analytics"

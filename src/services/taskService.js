@@ -2,7 +2,7 @@ import { firestore, COLLECTIONS } from './firebaseConfig';
 import { TASK_STATUS } from '../constants/taskStatus';
 
 export const taskService = {
-  // Create new task (Teacher only) - Supports multiple students
+  // Create new task with per-student progress tracking
   createTask: async taskData => {
     try {
       const { assignedTo, ...restData } = taskData;
@@ -11,16 +11,26 @@ export const taskService = {
         ? assignedTo 
         : [assignedTo];
 
+      // Initialize progress for each student
+      const studentProgress = {};
+      assignedStudents.forEach(studentId => {
+        studentProgress[studentId] = {
+          progress: 0,
+          status: TASK_STATUS.NOT_STARTED,
+          lastUpdated: firestore.FieldValue.serverTimestamp(),
+        };
+      });
+
       const taskRef = await firestore()
         .collection(COLLECTIONS.TASKS)
         .add({
           ...restData,
           assignedStudents,
-          status: TASK_STATUS.NOT_STARTED,
-          progress: 0,
+          studentProgress, // Per-student tracking!
           createdAt: firestore.FieldValue.serverTimestamp(),
           updatedAt: firestore.FieldValue.serverTimestamp(),
         });
+      
       return taskRef.id;
     } catch (error) {
       console.error('Create task error:', error);
@@ -28,52 +38,116 @@ export const taskService = {
     }
   },
 
-  // Get single task
-  getTask: async taskId => {
+  // Get single task with student-specific progress
+  getTask: async (taskId, studentId = null) => {
     try {
       const taskDoc = await firestore()
         .collection(COLLECTIONS.TASKS)
         .doc(taskId)
         .get();
-      return taskDoc.exists ? { id: taskDoc.id, ...taskDoc.data() } : null;
+      
+      if (!taskDoc.exists) return null;
+      
+      const taskData = { id: taskDoc.id, ...taskDoc.data() };
+      
+      // If student, add their specific progress
+      if (studentId && taskData.studentProgress) {
+        taskData.myProgress = taskData.studentProgress[studentId] || {
+          progress: 0,
+          status: TASK_STATUS.NOT_STARTED,
+        };
+      }
+      
+      return taskData;
     } catch (error) {
       console.error('Get task error:', error);
       throw error;
     }
   },
 
-  // Subscribe to teacher's tasks (Real-time listener)
-  subscribeToTeacherTasks: (teacherId, callback) => {
-    return firestore()
-      .collection(COLLECTIONS.TASKS)
-      .where('teacherId', '==', teacherId)
-      .orderBy('createdAt', 'desc')
-      .onSnapshot(
-        querySnapshot => {
-          const tasks = querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-          callback(tasks);
-        },
-        error => {
-          console.error('Error listening to teacher tasks:', error);
-        }
-      );
-  },
+  // Subscribe to teacher's tasks with student progress summary
+// Subscribe to teacher's tasks with student progress summary
+subscribeToTeacherTasks: (teacherId, callback) => {
+  return firestore()
+    .collection(COLLECTIONS.TASKS)
+    .where('teacherId', '==', teacherId)
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(
+      querySnapshot => {
+        const tasks = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          const studentProgress = data.studentProgress || {};
+          const assignedStudents = data.assignedStudents || [];
+          
+          // If no studentProgress exists, initialize it
+          const totalStudents = assignedStudents.length;
+          
+          if (totalStudents === 0) {
+            return {
+              id: doc.id,
+              ...data,
+              stats: {
+                totalStudents: 0,
+                completedStudents: 0,
+                avgProgress: 0,
+              },
+            };
+          }
 
-  // Subscribe to student's tasks (Real-time listener) - FIXED WITH INDEX!
+          // Calculate stats from studentProgress
+          const progressValues = Object.values(studentProgress);
+          const completedStudents = progressValues.filter(
+            sp => sp.progress === 100
+          ).length;
+          
+          const avgProgress = progressValues.length > 0
+            ? progressValues.reduce((sum, sp) => sum + (sp.progress || 0), 0) / progressValues.length
+            : 0;
+          
+          return {
+            id: doc.id,
+            ...data,
+            stats: {
+              totalStudents,
+              completedStudents,
+              avgProgress: Math.round(avgProgress),
+            },
+          };
+        });
+        
+        console.log('Teacher tasks loaded:', tasks.length);
+        tasks.forEach(t => console.log(`Task: ${t.title}, Stats:`, t.stats));
+        
+        callback(tasks);
+      },
+      error => {
+        console.error('Error listening to teacher tasks:', error);
+      }
+    );
+},
+
+
+  // Subscribe to student's tasks with their specific progress
   subscribeToStudentTasks: (studentId, callback) => {
     return firestore()
       .collection(COLLECTIONS.TASKS)
       .where('assignedStudents', 'array-contains', studentId)
-      .orderBy('deadline', 'asc') // ✅ NOW THIS WORKS WITH INDEX!
+      .orderBy('deadline', 'asc')
       .onSnapshot(
         querySnapshot => {
-          const tasks = querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
+          const tasks = querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            const myProgress = data.studentProgress?.[studentId] || {
+              progress: 0,
+              status: TASK_STATUS.NOT_STARTED,
+            };
+            
+            return {
+              id: doc.id,
+              ...data,
+              myProgress, // Student's own progress
+            };
+          });
           callback(tasks);
         },
         error => {
@@ -82,14 +156,108 @@ export const taskService = {
       );
   },
 
-  // Update task (Teacher) - Supports updating assignedStudents
+  // Update student's own progress
+  updateStudentProgress: async (taskId, studentId, progress) => {
+    try {
+      const status = progress === 0 
+        ? TASK_STATUS.NOT_STARTED
+        : progress === 100 
+        ? TASK_STATUS.COMPLETED 
+        : TASK_STATUS.IN_PROGRESS;
+
+      await firestore()
+        .collection(COLLECTIONS.TASKS)
+        .doc(taskId)
+        .update({
+          [`studentProgress.${studentId}`]: {
+            progress,
+            status,
+            lastUpdated: firestore.FieldValue.serverTimestamp(),
+          },
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        });
+    } catch (error) {
+      console.error('Update student progress error:', error);
+      throw error;
+    }
+  },
+
+  // Get detailed student progress for a task (Teacher view)
+  getStudentProgressDetails: async (taskId) => {
+    try {
+      const taskDoc = await firestore()
+        .collection(COLLECTIONS.TASKS)
+        .doc(taskId)
+        .get();
+      
+      if (!taskDoc.exists) return null;
+      
+      const taskData = taskDoc.data();
+      const studentProgress = taskData.studentProgress || {};
+      const assignedStudents = taskData.assignedStudents || [];
+      
+      // Get student details
+      const studentsData = await Promise.all(
+        assignedStudents.map(async studentId => {
+          const userDoc = await firestore()
+            .collection(COLLECTIONS.USERS)
+            .doc(studentId)
+            .get();
+          
+          const userData = userDoc.data();
+          const progress = studentProgress[studentId] || {
+            progress: 0,
+            status: TASK_STATUS.NOT_STARTED,
+          };
+          
+          return {
+            id: studentId,
+            name: userData?.name || 'Unknown',
+            email: userData?.email || 'N/A',
+            ...progress,
+          };
+        })
+      );
+      
+      return {
+        taskId,
+        taskTitle: taskData.title,
+        students: studentsData,
+      };
+    } catch (error) {
+      console.error('Get student progress details error:', error);
+      throw error;
+    }
+  },
+
+  // Update entire task (Teacher) - preserves student progress
   updateTask: async (taskId, data) => {
     try {
-      // If assignedTo is being updated, convert to array
+      // If adding new students, initialize their progress
       if (data.assignedTo) {
-        data.assignedStudents = Array.isArray(data.assignedTo) 
+        const newStudents = Array.isArray(data.assignedTo) 
           ? data.assignedTo 
           : [data.assignedTo];
+        
+        const taskDoc = await firestore()
+          .collection(COLLECTIONS.TASKS)
+          .doc(taskId)
+          .get();
+        
+        const currentProgress = taskDoc.data()?.studentProgress || {};
+        
+        newStudents.forEach(studentId => {
+          if (!currentProgress[studentId]) {
+            currentProgress[studentId] = {
+              progress: 0,
+              status: TASK_STATUS.NOT_STARTED,
+              lastUpdated: firestore.FieldValue.serverTimestamp(),
+            };
+          }
+        });
+        
+        data.assignedStudents = newStudents;
+        data.studentProgress = currentProgress;
         delete data.assignedTo;
       }
 
@@ -106,7 +274,7 @@ export const taskService = {
     }
   },
 
-  // Update task priority (Teacher)
+  // Update task priority
   updateTaskPriority: async (taskId, priority) => {
     try {
       await firestore()
@@ -125,11 +293,29 @@ export const taskService = {
   // Add students to existing task
   addStudentsToTask: async (taskId, studentIds) => {
     try {
+      const taskDoc = await firestore()
+        .collection(COLLECTIONS.TASKS)
+        .doc(taskId)
+        .get();
+      
+      const currentProgress = taskDoc.data()?.studentProgress || {};
+      
+      studentIds.forEach(studentId => {
+        if (!currentProgress[studentId]) {
+          currentProgress[studentId] = {
+            progress: 0,
+            status: TASK_STATUS.NOT_STARTED,
+            lastUpdated: firestore.FieldValue.serverTimestamp(),
+          };
+        }
+      });
+
       await firestore()
         .collection(COLLECTIONS.TASKS)
         .doc(taskId)
         .update({
           assignedStudents: firestore.FieldValue.arrayUnion(...studentIds),
+          studentProgress: currentProgress,
           updatedAt: firestore.FieldValue.serverTimestamp(),
         });
     } catch (error) {
@@ -146,6 +332,7 @@ export const taskService = {
         .doc(taskId)
         .update({
           assignedStudents: firestore.FieldValue.arrayRemove(studentId),
+          [`studentProgress.${studentId}`]: firestore.FieldValue.delete(),
           updatedAt: firestore.FieldValue.serverTimestamp(),
         });
     } catch (error) {
@@ -154,50 +341,7 @@ export const taskService = {
     }
   },
 
-  // Update task status (Student)
-  updateTaskStatus: async (taskId, status) => {
-    try {
-      await firestore()
-        .collection(COLLECTIONS.TASKS)
-        .doc(taskId)
-        .update({
-          status,
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-        });
-    } catch (error) {
-      console.error('Update task status error:', error);
-      throw error;
-    }
-  },
-
-  // Update task progress (Student)
-  updateTaskProgress: async (taskId, progress) => {
-    try {
-      const updates = {
-        progress,
-        updatedAt: firestore.FieldValue.serverTimestamp(),
-      };
-
-      // Auto-update status based on progress
-      if (progress === 0) {
-        updates.status = TASK_STATUS.NOT_STARTED;
-      } else if (progress === 100) {
-        updates.status = TASK_STATUS.COMPLETED;
-      } else {
-        updates.status = TASK_STATUS.IN_PROGRESS;
-      }
-
-      await firestore()
-        .collection(COLLECTIONS.TASKS)
-        .doc(taskId)
-        .update(updates);
-    } catch (error) {
-      console.error('Update task progress error:', error);
-      throw error;
-    }
-  },
-
-  // Delete task (Teacher only)
+  // Delete task
   deleteTask: async taskId => {
     try {
       await firestore().collection(COLLECTIONS.TASKS).doc(taskId).delete();
@@ -207,8 +351,8 @@ export const taskService = {
     }
   },
 
-  // Add comment to task
-  addComment: async (taskId, userId, userName, text) => {
+  // Add comment with user role
+  addComment: async (taskId, userId, userName, userRole, text) => {
     try {
       await firestore()
         .collection(COLLECTIONS.TASKS)
@@ -217,6 +361,7 @@ export const taskService = {
         .add({
           userId,
           userName,
+          userRole, // 'teacher' or 'student'
           text,
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
@@ -226,7 +371,7 @@ export const taskService = {
     }
   },
 
-  // Subscribe to comments (Real-time)
+  // Subscribe to comments
   subscribeToComments: (taskId, callback) => {
     return firestore()
       .collection(COLLECTIONS.TASKS)

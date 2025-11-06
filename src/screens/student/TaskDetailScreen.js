@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,30 +16,60 @@ import CommentInput from '../../components/comment/CommentInput';
 import PriorityBadge from '../../components/task/PriorityBadge';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { useAuth } from '../../hooks/useAuth';
-import { useTaskDetail } from '../../hooks/useTaskDetail';
 import { taskService } from '../../services/taskService';
 import { COLORS } from '../../constants/colors';
 import { formatDate, getTimeRemaining } from '../../utils/dateUtils';
 import { getDeadlineColor, getProgressColor } from '../../utils/colorUtils';
-import { STATUS_LABELS } from '../../constants/taskStatus';
 
 const TaskDetailScreen = ({ route, navigation }) => {
   const { taskId } = route.params;
   const { user, userData } = useAuth();
-  const { task, comments, loading } = useTaskDetail(taskId);
+  const [task, setTask] = useState(null);
+  const [comments, setComments] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [updating, setUpdating] = useState(false);
 
-  React.useEffect(() => {
-    if (task) {
-      setProgress(task.progress || 0);
+  useEffect(() => {
+    loadTask();
+    
+    // Subscribe to task updates
+    const unsubscribeTask = taskService.subscribeToStudentTasks(user.uid, tasks => {
+      const currentTask = tasks.find(t => t.id === taskId);
+      if (currentTask) {
+        setTask(currentTask);
+        setProgress(currentTask.myProgress?.progress || 0);
+      }
+    });
+
+    // Subscribe to comments
+    const unsubscribeComments = taskService.subscribeToComments(taskId, setComments);
+
+    return () => {
+      unsubscribeTask();
+      unsubscribeComments();
+    };
+  }, [taskId, user.uid]);
+
+  const loadTask = async () => {
+    try {
+      const taskData = await taskService.getTask(taskId, user.uid);
+      if (taskData) {
+        setTask(taskData);
+        setProgress(taskData.myProgress?.progress || 0);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load task');
+      console.error(error);
+    } finally {
+      setLoading(false);
     }
-  }, [task]);
+  };
 
   const handleUpdateProgress = async () => {
     try {
       setUpdating(true);
-      await taskService.updateTaskProgress(taskId, progress);
+      await taskService.updateStudentProgress(taskId, user.uid, progress);
       Alert.alert('Success', 'Progress updated successfully!');
     } catch (error) {
       Alert.alert('Error', 'Failed to update progress');
@@ -60,7 +90,7 @@ const TaskDetailScreen = ({ route, navigation }) => {
           onPress: async () => {
             try {
               setUpdating(true);
-              await taskService.updateTaskProgress(taskId, 100);
+              await taskService.updateStudentProgress(taskId, user.uid, 100);
               setProgress(100);
               Alert.alert('Success', 'Task marked as complete!');
             } catch (error) {
@@ -76,7 +106,7 @@ const TaskDetailScreen = ({ route, navigation }) => {
 
   const handleAddComment = async text => {
     try {
-      await taskService.addComment(taskId, user.uid, userData.name, text);
+      await taskService.addComment(taskId, user.uid, userData.name, 'student', text);
     } catch (error) {
       Alert.alert('Error', 'Failed to add comment');
       console.error(error);
@@ -96,9 +126,10 @@ const TaskDetailScreen = ({ route, navigation }) => {
     );
   }
 
+  const myProgress = task.myProgress || { progress: 0, status: 'not_started' };
   const deadlineColor = getDeadlineColor(task.deadline);
   const progressColor = getProgressColor(progress);
-  const hasProgressChanged = progress !== task.progress;
+  const hasProgressChanged = progress !== myProgress.progress;
   const isCompleted = progress === 100;
 
   return (
@@ -129,21 +160,22 @@ const TaskDetailScreen = ({ route, navigation }) => {
             </View>
           </View>
 
-          {/* Status */}
+          {/* Teacher Info */}
           <View style={styles.infoRow}>
-            <Icon name="information-outline" size={20} color={progressColor} />
+            <Icon name="account-tie" size={20} color={COLORS.primary} />
             <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Status</Text>
-              <Text style={[styles.infoValue, { color: progressColor }]}>
-                {STATUS_LABELS[task.status]}
-              </Text>
+              <Text style={styles.infoLabel}>Assigned by</Text>
+              <Text style={styles.infoValue}>Teacher</Text>
             </View>
           </View>
         </Card>
 
-        {/* Progress Card */}
+        {/* My Progress Card */}
         <Card style={styles.progressCard}>
-          <Text style={styles.sectionTitle}>Update Progress</Text>
+          <View style={styles.cardHeader}>
+            <Icon name="chart-line" size={24} color={COLORS.primary} />
+            <Text style={styles.sectionTitle}>My Progress</Text>
+          </View>
 
           <View style={styles.progressHeader}>
             <Text style={styles.progressLabel}>Current Progress</Text>
@@ -221,27 +253,34 @@ const TaskDetailScreen = ({ route, navigation }) => {
 
           {isCompleted && (
             <View style={styles.completedBadge}>
-              <Icon name="check-circle" size={48} color={COLORS.success} />
+              <Icon name="check-circle" size={64} color={COLORS.success} />
               <Text style={styles.completedText}>Task Completed!</Text>
+              <Text style={styles.completedSubtext}>Great job! 🎉</Text>
             </View>
           )}
         </Card>
 
         {/* Comments Section */}
         <Card style={styles.commentsCard}>
-          <View style={styles.commentsHeader}>
+          <View style={styles.cardHeader}>
             <Icon name="comment-text-outline" size={24} color={COLORS.primary} />
             <Text style={styles.sectionTitle}>
-              Comments ({comments.length})
+              Discussion ({comments.length})
             </Text>
           </View>
 
           {comments.length === 0 ? (
-            <Text style={styles.noComments}>No comments yet</Text>
+            <Text style={styles.noComments}>
+              No comments yet. Start the discussion!
+            </Text>
           ) : (
             <View style={styles.commentsList}>
               {comments.map(comment => (
-                <CommentItem key={comment.id} comment={comment} />
+                <CommentItem 
+                  key={comment.id} 
+                  comment={comment}
+                  currentUserId={user.uid}
+                />
               ))}
             </View>
           )}
@@ -311,6 +350,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginBottom: 4,
+    textTransform: 'uppercase',
   },
   infoValue: {
     fontSize: 16,
@@ -326,6 +366,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 16,
   },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
@@ -336,7 +381,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 8,
     marginBottom: 8,
   },
   progressLabel: {
@@ -344,11 +389,11 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   progressValue: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
   },
   progressBarContainer: {
-    marginBottom: 8,
+    marginBottom: 16,
   },
   progressBar: {
     height: 12,
@@ -367,47 +412,49 @@ const styles = StyleSheet.create({
   quickActions: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   quickButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
     backgroundColor: COLORS.background,
-    borderRadius: 16,
-    borderWidth: 1,
+    borderRadius: 20,
+    borderWidth: 2,
     borderColor: COLORS.primary,
   },
   quickButtonText: {
     color: COLORS.primary,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 14,
   },
   updateButton: {
-    marginBottom: 8,
+    marginBottom: 12,
   },
   completedBadge: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 32,
   },
   completedText: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: 'bold',
     color: COLORS.success,
-    marginTop: 12,
+    marginTop: 16,
+  },
+  completedSubtext: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    marginTop: 8,
   },
   commentsCard: {
     marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  commentsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 16,
   },
   noComments: {
     textAlign: 'center',
     color: COLORS.textSecondary,
     fontSize: 14,
-    paddingVertical: 20,
+    paddingVertical: 24,
+    fontStyle: 'italic',
   },
   commentsList: {
     marginTop: 8,
