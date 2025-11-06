@@ -2,13 +2,20 @@ import { firestore, COLLECTIONS } from './firebaseConfig';
 import { TASK_STATUS } from '../constants/taskStatus';
 
 export const taskService = {
-  // Create new task (Teacher only)
+  // Create new task (Teacher only) - Supports multiple students
   createTask: async taskData => {
     try {
+      const { assignedTo, ...restData } = taskData;
+      
+      const assignedStudents = Array.isArray(assignedTo) 
+        ? assignedTo 
+        : [assignedTo];
+
       const taskRef = await firestore()
         .collection(COLLECTIONS.TASKS)
         .add({
-          ...taskData,
+          ...restData,
+          assignedStudents,
           status: TASK_STATUS.NOT_STARTED,
           progress: 0,
           createdAt: firestore.FieldValue.serverTimestamp(),
@@ -55,12 +62,12 @@ export const taskService = {
       );
   },
 
-  // Subscribe to student's tasks (Real-time listener)
+  // Subscribe to student's tasks (Real-time listener) - FIXED WITH INDEX!
   subscribeToStudentTasks: (studentId, callback) => {
     return firestore()
       .collection(COLLECTIONS.TASKS)
-      .where('assignedTo', '==', studentId)
-      .orderBy('deadline', 'asc')
+      .where('assignedStudents', 'array-contains', studentId)
+      .orderBy('deadline', 'asc') // ✅ NOW THIS WORKS WITH INDEX!
       .onSnapshot(
         querySnapshot => {
           const tasks = querySnapshot.docs.map(doc => ({
@@ -75,9 +82,17 @@ export const taskService = {
       );
   },
 
-  // Update task (Teacher)
+  // Update task (Teacher) - Supports updating assignedStudents
   updateTask: async (taskId, data) => {
     try {
+      // If assignedTo is being updated, convert to array
+      if (data.assignedTo) {
+        data.assignedStudents = Array.isArray(data.assignedTo) 
+          ? data.assignedTo 
+          : [data.assignedTo];
+        delete data.assignedTo;
+      }
+
       await firestore()
         .collection(COLLECTIONS.TASKS)
         .doc(taskId)
@@ -87,6 +102,54 @@ export const taskService = {
         });
     } catch (error) {
       console.error('Update task error:', error);
+      throw error;
+    }
+  },
+
+  // Update task priority (Teacher)
+  updateTaskPriority: async (taskId, priority) => {
+    try {
+      await firestore()
+        .collection(COLLECTIONS.TASKS)
+        .doc(taskId)
+        .update({
+          priority,
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        });
+    } catch (error) {
+      console.error('Update task priority error:', error);
+      throw error;
+    }
+  },
+
+  // Add students to existing task
+  addStudentsToTask: async (taskId, studentIds) => {
+    try {
+      await firestore()
+        .collection(COLLECTIONS.TASKS)
+        .doc(taskId)
+        .update({
+          assignedStudents: firestore.FieldValue.arrayUnion(...studentIds),
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        });
+    } catch (error) {
+      console.error('Add students to task error:', error);
+      throw error;
+    }
+  },
+
+  // Remove student from task
+  removeStudentFromTask: async (taskId, studentId) => {
+    try {
+      await firestore()
+        .collection(COLLECTIONS.TASKS)
+        .doc(taskId)
+        .update({
+          assignedStudents: firestore.FieldValue.arrayRemove(studentId),
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        });
+    } catch (error) {
+      console.error('Remove student from task error:', error);
       throw error;
     }
   },
