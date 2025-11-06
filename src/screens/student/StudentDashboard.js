@@ -1,14 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  RefreshControl,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useAuth } from '../../hooks/useAuth';
-import { useTasks } from '../../hooks/useTasks';
+import { taskService } from '../../services/taskService';
 import TaskList from '../../components/task/TaskList';
 import Card from '../../components/common/Card';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -16,44 +17,80 @@ import { COLORS } from '../../constants/colors';
 import { isOverdue } from '../../utils/dateUtils';
 
 const StudentDashboard = ({ navigation }) => {
-  const { userData, logout } = useAuth();
-  const { tasks, loading } = useTasks();
+  const { user, userData, logout } = useAuth();
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState('all'); // all, active, completed
+  const [filter, setFilter] = useState('all');
+  const [forceUpdate, setForceUpdate] = useState(0);
 
-const stats = useMemo(() => {
-  const total = tasks.length;
-  const completed = tasks.filter(t => t.myProgress?.progress === 100).length;
-  const inProgress = tasks.filter(
-    t => t.myProgress?.progress > 0 && t.myProgress?.progress < 100
-  ).length;
-  const notStarted = tasks.filter(t => t.myProgress?.progress === 0).length;
-  const overdue = tasks.filter(
-    t => isOverdue(t.deadline) && t.myProgress?.progress < 100
-  ).length;
+  // Force update on screen focus
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('🔄 Student Dashboard focused - forcing update');
+      setForceUpdate(prev => prev + 1);
+    }, [])
+  );
 
-  return { total, completed, inProgress, notStarted, overdue };
-}, [tasks]);
+  // Real-time subscription
+  useEffect(() => {
+    console.log('Student Dashboard - Setting up subscription for:', user.uid);
+    
+    const unsubscribe = taskService.subscribeToStudentTasks(user.uid, loadedTasks => {
+      console.log('Student tasks updated:', loadedTasks.length);
+      loadedTasks.forEach(t => {
+        console.log(`  - ${t.title}: ${t.myProgress?.progress}%`);
+      });
+      setTasks(loadedTasks);
+      setLoading(false);
+    });
 
+    return () => {
+      console.log('Student Dashboard - Unsubscribing');
+      unsubscribe();
+    };
+  }, [user.uid, forceUpdate]);
 
- const filteredTasks = useMemo(() => {
-  if (filter === 'completed') {
-    return tasks.filter(t => t.myProgress?.progress === 100);
-  }
-  if (filter === 'active') {
-    return tasks.filter(t => t.myProgress?.progress < 100);
-  }
-  if (filter === 'overdue') {
-    return tasks.filter(
-      t => isOverdue(t.deadline) && t.myProgress?.progress < 100
-    );
-  }
-  return tasks;
-}, [tasks, filter]);
+  const stats = useMemo(() => {
+    if (!tasks || tasks.length === 0) {
+      return { total: 0, completed: 0, inProgress: 0, notStarted: 0, overdue: 0 };
+    }
+
+    const total = tasks.length;
+    const completed = tasks.filter(t => t.myProgress?.progress === 100).length;
+    const inProgress = tasks.filter(
+      t => (t.myProgress?.progress || 0) > 0 && (t.myProgress?.progress || 0) < 100
+    ).length;
+    const notStarted = tasks.filter(t => (t.myProgress?.progress || 0) === 0).length;
+    const overdue = tasks.filter(
+      t => isOverdue(t.deadline) && (t.myProgress?.progress || 0) < 100
+    ).length;
+
+    console.log('Student Dashboard Stats:', { total, completed, inProgress, notStarted, overdue });
+
+    return { total, completed, inProgress, notStarted, overdue };
+  }, [tasks]);
+
+  const filteredTasks = useMemo(() => {
+    if (!tasks) return [];
+    
+    if (filter === 'completed') {
+      return tasks.filter(t => t.myProgress?.progress === 100);
+    }
+    if (filter === 'active') {
+      return tasks.filter(t => (t.myProgress?.progress || 0) < 100);
+    }
+    if (filter === 'overdue') {
+      return tasks.filter(
+        t => isOverdue(t.deadline) && (t.myProgress?.progress || 0) < 100
+      );
+    }
+    return tasks;
+  }, [tasks, filter]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // Tasks auto-refresh via real-time listener
+    // The real-time listener will update automatically
     setTimeout(() => setRefreshing(false), 1000);
   };
 
@@ -62,7 +99,10 @@ const stats = useMemo(() => {
   };
 
   const handleLogout = () => {
-    logout();
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Logout', onPress: logout, style: 'destructive' },
+    ]);
   };
 
   if (loading) {
@@ -85,26 +125,26 @@ const stats = useMemo(() => {
       {/* Stats Cards */}
       <View style={styles.statsContainer}>
         <Card style={styles.statCard}>
-          <Icon name="clipboard-text-outline" size={32} color={COLORS.primary} />
+          <Icon name="clipboard-text-outline" size={28} color={COLORS.primary} />
           <Text style={styles.statValue}>{stats.total}</Text>
-          <Text style={styles.statLabel}>Total Tasks</Text>
+          <Text style={styles.statLabel}>Total</Text>
         </Card>
 
         <Card style={styles.statCard}>
-          <Icon name="progress-clock" size={32} color={COLORS.info} />
+          <Icon name="progress-clock" size={28} color={COLORS.info} />
           <Text style={styles.statValue}>{stats.inProgress}</Text>
-          <Text style={styles.statLabel}>In Progress</Text>
+          <Text style={styles.statLabel}>Active</Text>
         </Card>
 
         <Card style={styles.statCard}>
-          <Icon name="check-circle-outline" size={32} color={COLORS.success} />
+          <Icon name="check-circle-outline" size={28} color={COLORS.success} />
           <Text style={styles.statValue}>{stats.completed}</Text>
-          <Text style={styles.statLabel}>Completed</Text>
+          <Text style={styles.statLabel}>Done</Text>
         </Card>
 
         {stats.overdue > 0 && (
           <Card style={[styles.statCard, styles.overdueCard]}>
-            <Icon name="alert-circle-outline" size={32} color={COLORS.error} />
+            <Icon name="alert-circle-outline" size={28} color={COLORS.error} />
             <Text style={[styles.statValue, { color: COLORS.error }]}>
               {stats.overdue}
             </Text>
@@ -125,7 +165,7 @@ const stats = useMemo(() => {
               filter === 'all' && styles.filterTextActive,
             ]}
           >
-            All ({tasks.length})
+            All ({stats.total})
           </Text>
         </TouchableOpacity>
 
@@ -142,7 +182,7 @@ const stats = useMemo(() => {
               filter === 'active' && styles.filterTextActive,
             ]}
           >
-            Active ({stats.inProgress + (stats.total - stats.completed - stats.inProgress)})
+            Active ({stats.inProgress + stats.notStarted})
           </Text>
         </TouchableOpacity>
 
@@ -237,13 +277,14 @@ const styles = StyleSheet.create({
   },
   filterContainer: {
     flexDirection: 'row',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
     gap: 8,
   },
   filterTab: {
     flex: 1,
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     borderRadius: 8,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
@@ -255,7 +296,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   filterText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: COLORS.textSecondary,
   },

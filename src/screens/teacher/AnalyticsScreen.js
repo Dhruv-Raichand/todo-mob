@@ -18,15 +18,9 @@ const AnalyticsScreen = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // ALWAYS call useEffect - no early returns before this
   useEffect(() => {
     const unsubscribe = taskService.subscribeToTeacherTasks(user.uid, loadedTasks => {
-      console.log('Analytics - Tasks loaded:', loadedTasks.length);
-      loadedTasks.forEach(t => {
-        console.log(`Task: ${t.title}`);
-        console.log('  studentProgress:', t.studentProgress);
-        console.log('  stats:', t.stats);
-      });
+      console.log('📊 Analytics - Tasks loaded:', loadedTasks.length);
       setTasks(loadedTasks);
       setLoading(false);
     });
@@ -34,7 +28,6 @@ const AnalyticsScreen = () => {
     return () => unsubscribe();
   }, [user.uid]);
 
-  // ALWAYS call useMemo - no early returns before this
   const analytics = useMemo(() => {
     if (!tasks || tasks.length === 0) {
       return {
@@ -42,6 +35,7 @@ const AnalyticsScreen = () => {
         totalStudents: 0,
         completedTasks: 0,
         inProgressTasks: 0,
+        notStartedTasks: 0,
         overdueTasks: 0,
         avgProgress: 0,
         completionRate: 0,
@@ -49,21 +43,26 @@ const AnalyticsScreen = () => {
       };
     }
 
-    let totalStudents = 0;
+    console.log('📈 Calculating analytics for', tasks.length, 'tasks');
+
+    let maxStudents = 0;
     let totalProgressSum = 0;
     let totalProgressCount = 0;
-    let completedTasks = 0;
-    let inProgressTasks = 0;
-    let overdueTasks = 0;
+    let completedTasksCount = 0;
+    let inProgressTasksCount = 0;
+    let notStartedTasksCount = 0;
+    let overdueTasksCount = 0;
 
     const tasksData = tasks.map(task => {
       const studentProgress = task.studentProgress || {};
       const assignedStudents = task.assignedStudents || [];
       const studentCount = assignedStudents.length;
 
-      totalStudents = Math.max(totalStudents, studentCount);
+      maxStudents = Math.max(maxStudents, studentCount);
 
       const progressValues = Object.values(studentProgress);
+      
+      // Calculate average progress for this task
       const taskAvgProgress = progressValues.length > 0
         ? progressValues.reduce((sum, sp) => sum + (sp?.progress || 0), 0) / progressValues.length
         : 0;
@@ -73,14 +72,21 @@ const AnalyticsScreen = () => {
         ? (taskCompletedStudents / studentCount) * 100 
         : 0;
 
+      console.log(`Task: ${task.title}`);
+      console.log(`  Avg Progress: ${taskAvgProgress.toFixed(1)}%`);
+      console.log(`  Completed: ${taskCompletedStudents}/${studentCount}`);
+
+      // Categorize task based on average progress
       if (taskAvgProgress === 100) {
-        completedTasks++;
+        completedTasksCount++;
       } else if (taskAvgProgress > 0) {
-        inProgressTasks++;
+        inProgressTasksCount++;
+      } else {
+        notStartedTasksCount++;
       }
 
       if (isOverdue(task.deadline) && taskAvgProgress < 100) {
-        overdueTasks++;
+        overdueTasksCount++;
       }
 
       totalProgressSum += taskAvgProgress;
@@ -103,22 +109,29 @@ const AnalyticsScreen = () => {
       : 0;
 
     const completionRate = tasks.length > 0 
-      ? Math.round((completedTasks / tasks.length) * 100) 
+      ? Math.round((completedTasksCount / tasks.length) * 100) 
       : 0;
+
+    console.log('📊 Final Stats:');
+    console.log('  Total Tasks:', tasks.length);
+    console.log('  Completed:', completedTasksCount);
+    console.log('  In Progress:', inProgressTasksCount);
+    console.log('  Not Started:', notStartedTasksCount);
+    console.log('  Avg Progress:', avgProgress + '%');
 
     return {
       totalTasks: tasks.length,
-      totalStudents,
-      completedTasks,
-      inProgressTasks,
-      overdueTasks,
+      totalStudents: maxStudents,
+      completedTasks: completedTasksCount,
+      inProgressTasks: inProgressTasksCount,
+      notStartedTasks: notStartedTasksCount,
+      overdueTasks: overdueTasksCount,
       avgProgress,
       completionRate,
       tasksData,
     };
   }, [tasks]);
 
-  // NOW we can do conditional rendering AFTER all hooks
   if (loading) {
     return <LoadingSpinner message="Loading analytics..." />;
   }

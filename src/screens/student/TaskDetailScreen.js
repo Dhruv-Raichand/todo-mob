@@ -69,7 +69,20 @@ const TaskDetailScreen = ({ route, navigation }) => {
   const handleUpdateProgress = async () => {
     try {
       setUpdating(true);
+      
+      // Update in Firebase
       await taskService.updateStudentProgress(taskId, user.uid, progress);
+      
+      // Update local state immediately
+      setTask(prev => ({
+        ...prev,
+        myProgress: {
+          ...prev.myProgress,
+          progress: progress,
+          status: progress === 100 ? 'completed' : progress > 0 ? 'in_progress' : 'not_started',
+        },
+      }));
+      
       Alert.alert('Success', 'Progress updated successfully!');
     } catch (error) {
       Alert.alert('Error', 'Failed to update progress');
@@ -306,6 +319,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: COLORS.background,
   },
   errorText: {
     fontSize: 18,
