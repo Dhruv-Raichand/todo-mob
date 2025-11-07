@@ -20,6 +20,7 @@ import { taskService } from '../../services/taskService';
 import { COLORS } from '../../constants/colors';
 import { formatDate, getTimeRemaining } from '../../utils/dateUtils';
 import { getDeadlineColor, getProgressColor } from '../../utils/colorUtils';
+import { getRoleDisplay } from '../../utils/roleUtils';
 
 const TaskDetailScreen = ({ route, navigation }) => {
   const { taskId } = route.params;
@@ -178,7 +179,8 @@ const TaskDetailScreen = ({ route, navigation }) => {
             <Icon name="account-tie" size={20} color={COLORS.primary} />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Assigned by</Text>
-              <Text style={styles.infoValue}>Teacher</Text>
+              <Text style={styles.infoValue}>  {getRoleDisplay('teacher')}
+</Text>
             </View>
           </View>
         </Card>

@@ -13,6 +13,7 @@ import { taskService } from '../../services/taskService';
 import { COLORS } from '../../constants/colors';
 import { getProgressColor } from '../../utils/colorUtils';
 import { STATUS_LABELS } from '../../constants/taskStatus';
+import { getRoleDisplay } from '../../utils/roleUtils';
 
 const StudentProgressScreen = ({ route, navigation }) => {
   const { taskId } = route.params;

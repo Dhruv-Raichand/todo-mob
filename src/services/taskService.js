@@ -129,9 +129,9 @@ subscribeToTeacherTasks: (teacherId, callback) => {
 
   // Subscribe to student's tasks with their specific progress
 // Subscribe to student's tasks (Real-time listener) - Updated for array
-subscribeToStudentTasks: (studentId, callback) => {
+subscribeToStudentTasks: (studentId, callback, onError) => {
   console.log('📡 Setting up student tasks listener for:', studentId);
-  
+
   return firestore()
     .collection(COLLECTIONS.TASKS)
     .where('assignedStudents', 'array-contains', studentId)
@@ -139,31 +139,33 @@ subscribeToStudentTasks: (studentId, callback) => {
     .onSnapshot(
       querySnapshot => {
         console.log('🔥 Firestore snapshot received! Tasks:', querySnapshot.docs.length);
-        
+
         const tasks = querySnapshot.docs.map(doc => {
           const data = doc.data();
           const myProgress = data.studentProgress?.[studentId] || {
             progress: 0,
             status: TASK_STATUS.NOT_STARTED,
           };
-          
+
           console.log(`  📋 ${data.title}: ${myProgress.progress}%`);
-          
+
           return {
             id: doc.id,
             ...data,
-            myProgress, // Student's own progress
+            myProgress,
           };
         });
-        
+
         console.log('✅ Calling callback with', tasks.length, 'tasks');
         callback(tasks);
       },
       error => {
         console.error('❌ Error listening to student tasks:', error);
+        if (onError) onError(error);
       }
     );
 },
+
 
 
   // Update student's own progress

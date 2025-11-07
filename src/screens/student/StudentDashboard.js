@@ -5,7 +5,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
+  Alert,ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useAuth } from '../../hooks/useAuth';
@@ -15,6 +15,7 @@ import Card from '../../components/common/Card';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { COLORS } from '../../constants/colors';
 import { isOverdue } from '../../utils/dateUtils';
+import { getRoleDisplay } from '../../utils/roleUtils';
 
 const StudentDashboard = ({ navigation }) => {
   const { user, userData, logout } = useAuth();
@@ -33,23 +34,23 @@ const StudentDashboard = ({ navigation }) => {
   );
 
   // Real-time subscription
-  useEffect(() => {
-    console.log('Student Dashboard - Setting up subscription for:', user.uid);
-    
-    const unsubscribe = taskService.subscribeToStudentTasks(user.uid, loadedTasks => {
-      console.log('Student tasks updated:', loadedTasks.length);
-      loadedTasks.forEach(t => {
-        console.log(`  - ${t.title}: ${t.myProgress?.progress}%`);
-      });
+useEffect(() => {
+  const unsubscribe = taskService.subscribeToStudentTasks(
+    user.uid,
+    loadedTasks => {
       setTasks(loadedTasks);
       setLoading(false);
-    });
+    },
+    error => {
+      setLoading(false);
+      Alert.alert('Error', 'Failed to load tasks: ' + error.message);
+    }
+  );
 
-    return () => {
-      console.log('Student Dashboard - Unsubscribing');
-      unsubscribe();
-    };
-  }, [user.uid, forceUpdate]);
+  return () => {
+    unsubscribe();
+  };
+}, [user.uid, forceUpdate]);
 
   const stats = useMemo(() => {
     if (!tasks || tasks.length === 0) {
@@ -110,17 +111,25 @@ const StudentDashboard = ({ navigation }) => {
   }
 
   return (
+          <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 24 }}>
+    
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Hello,</Text>
-          <Text style={styles.userName}>{userData?.name || 'Student'}</Text>
-        </View>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <Icon name="logout" size={24} color={COLORS.primary} />
-        </TouchableOpacity>
-      </View>
+<View style={styles.header}>
+  <View>
+    <Text style={styles.greeting}>Hello,</Text>
+    <Text style={styles.userName}>
+      {userData?.name}
+      {userData?.role && (
+        <Text style={styles.roleTitle}> ({getRoleDisplay(userData.role)})</Text>
+      )}
+    </Text>
+  </View>
+  <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+    <Icon name="logout" size={20} color={COLORS.primary} />
+  </TouchableOpacity>
+</View>
+
 
       {/* Stats Cards */}
       <View style={styles.statsContainer}>
@@ -219,6 +228,8 @@ const StudentDashboard = ({ navigation }) => {
         onRefresh={onRefresh}
       />
     </View>
+          </ScrollView>
+    
   );
 };
 
@@ -227,15 +238,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
+ header: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  paddingVertical: 8,    // Reduced
+  paddingHorizontal: 16, // Tighter look
+  backgroundColor: COLORS.surface,
+  borderBottomWidth: 1,
+  borderBottomColor: COLORS.border,
+},
+roleTitle: {
+  fontSize: 14,
+  color: COLORS.textSecondary,
+}
+,
   greeting: {
     fontSize: 14,
     color: COLORS.textSecondary,
@@ -249,32 +266,30 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   statsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 12,
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    minWidth: '45%',
-    alignItems: 'center',
-    padding: 16,
-  },
-  overdueCard: {
-    borderColor: COLORS.error,
-    borderWidth: 1,
-  },
-  statValue: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginTop: 8,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-  },
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  padding: 6,       // Reduced from 12
+  gap: 6,           // Reduced from 12
+},
+statCard: {
+  flex: 1,
+  minWidth: 38,     // Reduced from 45
+  alignItems: 'center',
+  padding: 10,      // Reduced from 16
+},
+statValue: {
+  fontSize: 20,     // Reduced from 28
+  fontWeight: 'bold',
+  color: COLORS.primary,
+  marginTop: 4,     // Reduced from 8
+},
+statLabel: {
+  fontSize: 10,     // Reduced from 12
+  color: COLORS.textSecondary,
+  marginTop: 2,     // Reduced from 4
+  textAlign: 'center',
+},
+
   filterContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,

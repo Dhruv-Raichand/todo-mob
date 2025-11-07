@@ -5,6 +5,7 @@ import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import { COLORS } from '../../constants/colors';
 import { ROLES } from '../../constants/roles';
+import { getRoleDisplay } from '../../utils/roleUtils';
 
 const ProfileScreen = ({ navigation }) => {
   const { user, userData, logout } = useAuth();
@@ -56,7 +57,7 @@ const ProfileScreen = ({ navigation }) => {
             ]}
           >
             <Text style={styles.roleText}>
-              {userData?.role === ROLES.TEACHER ? '👨‍🏫 Teacher' : '👨‍🎓 Student'}
+              {getRoleDisplay(userData?.role)}
             </Text>
           </View>
           {userData?.role === ROLES.TEACHER && !userData?.verified && (
@@ -78,7 +79,7 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Account Type</Text>
           <Text style={styles.infoValue}>
-            {userData?.role === ROLES.TEACHER ? 'Teacher' : 'Student'}
+            {getRoleDisplay(userData?.role)}
           </Text>
         </View>
 

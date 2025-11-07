@@ -26,7 +26,7 @@ const TeacherNavigator = () => {
       <Stack.Screen
         name="Dashboard"
         component={TeacherDashboard}
-        options={{ title: 'Teacher Dashboard' }}
+        options={{ title: 'Chairman Dashboard' }}
       />
       <Stack.Screen
         name="CreateTask"

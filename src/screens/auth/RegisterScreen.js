@@ -20,6 +20,7 @@ import {
   validateRequired,
   getErrorMessage,
 } from '../../utils/validationUtils';
+import { getRoleDisplay } from '../../utils/roleUtils';
 
 const RegisterScreen = ({ navigation }) => {
   const { register } = useAuth();
@@ -158,8 +159,9 @@ const RegisterScreen = ({ navigation }) => {
                 onValueChange={value => handleChange('role', value)}
                 style={styles.picker}
               >
-                <Picker.Item label="Student" value={ROLES.STUDENT} />
-                <Picker.Item label="Teacher" value={ROLES.TEACHER} />
+                <Picker.Item label={getRoleDisplay(ROLES.STUDENT)} value={ROLES.STUDENT} />
+<Picker.Item label={getRoleDisplay(ROLES.TEACHER)} value={ROLES.TEACHER} />
+
               </Picker>
             </View>
           </View>
