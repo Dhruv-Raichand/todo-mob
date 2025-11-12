@@ -6,6 +6,7 @@ import Button from '../../components/common/Button';
 import { COLORS } from '../../constants/colors';
 import { ROLES } from '../../constants/roles';
 import { getRoleDisplay } from '../../utils/roleUtils';
+import { migrateAllData } from '../../utils/migrateFirestoreData';
 
 const ProfileScreen = ({ navigation }) => {
   const { user, userData, logout } = useAuth();
@@ -99,7 +100,17 @@ const ProfileScreen = ({ navigation }) => {
           </Text>
         </View>
       </Card>
-
+{/* <Button
+  title="🔄 Migrate Database"
+  onPress={async () => {
+    const result = await migrateAllData();
+    if (result.success) {
+      Alert.alert('Success', 'Database migrated! Please restart the app.');
+    } else {
+      Alert.alert('Error', result.error);
+    }
+  }}
+/> */}
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Actions</Text>
         <Button title="Logout" onPress={handleLogout} variant="outline" />

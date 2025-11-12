@@ -3,37 +3,30 @@ import { ROLES } from '../constants/roles';
 
 export const authService = {
   // Register new user
-  register: async (email, password, name, role = ROLES.STUDENT) => {
-    try {
-      const userCredential = await auth().createUserWithEmailAndPassword(
-        email,
-        password
-      );
-      const { uid } = userCredential.user;
+ // In authService.js
+register: async (email, password, name, role) => {
+  try {
+    const userCredential = await auth().createUserWithEmailAndPassword(email, password);
+    const user = userCredential.user;
 
-      // Update display name
-      await userCredential.user.updateProfile({ displayName: name });
+    await firestore()
+      .collection(COLLECTIONS.USERS)
+      .doc(user.uid)
+      .set({
+        email: user.email,
+        name: name,  // ← Make sure this is included
+        role: role,
+        verified: role === 'student' ? true : false,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+      });
 
-      // Create user document in Firestore
-      await firestore()
-        .collection(COLLECTIONS.USERS)
-        .doc(uid)
-        .set({
-          uid,
-          email,
-          name,
-          role,
-          verified: role === ROLES.STUDENT, // Students auto-verified
-          createdAt: firestore.FieldValue.serverTimestamp(),
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-        });
+    return user;
+  } catch (error) {
+    console.error('Register error:', error);
+    throw error;
+  }
+},
 
-      return userCredential.user;
-    } catch (error) {
-      console.error('Register error:', error);
-      throw error;
-    }
-  },
 
   // Login
   login: async (email, password) => {

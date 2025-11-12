@@ -5,12 +5,12 @@ import { useAuth } from '../hooks/useAuth';
 export const TaskContext = createContext();
 
 export const TaskProvider = ({ children }) => {
-  const { user, isTeacher } = useAuth();
+  const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) {
+    if (!user?.uid) {
       setTasks([]);
       setLoading(false);
       return;
@@ -18,35 +18,40 @@ export const TaskProvider = ({ children }) => {
 
     let unsubscribe;
 
-    if (isTeacher) {
-      unsubscribe = taskService.subscribeToTeacherTasks(user.uid, tasksList => {
-        setTasks(tasksList);
+    // Subscribe based on role
+    if (user.role === 'chairman') {
+      unsubscribe = taskService.subscribeToChairmanTasks(user.uid, (fetchedTasks) => {
+        setTasks(fetchedTasks);
         setLoading(false);
       });
-    } else {
-      unsubscribe = taskService.subscribeToStudentTasks(user.uid, tasksList => {
-        setTasks(tasksList);
-        setLoading(false);
-      });
+    } else if (user.role === 'faculty') {
+      unsubscribe = taskService.subscribeToFacultyTasks(
+        user.uid,
+        (fetchedTasks) => {
+          setTasks(fetchedTasks);
+          setLoading(false);
+        },
+        (error) => {
+          console.error('Error in TaskContext:', error);
+          setLoading(false);
+        }
+      );
     }
 
     return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
+      if (unsubscribe) unsubscribe();
     };
-  }, [user, isTeacher]);
+  }, [user?.uid, user?.role]);
 
-  const value = {
-    tasks,
-    loading,
-    createTask: taskService.createTask,
-    updateTask: taskService.updateTask,
-    updateTaskStatus: taskService.updateTaskStatus,
-    updateTaskProgress: taskService.updateTaskProgress,
-    deleteTask: taskService.deleteTask,
-    addComment: taskService.addComment,
+  const refreshTasks = async () => {
+    // The real-time listener will automatically update
+    setLoading(true);
+    setTimeout(() => setLoading(false), 500);
   };
 
-  return <TaskContext.Provider value={value}>{children}</TaskContext.Provider>;
+  return (
+    <TaskContext.Provider value={{ tasks, loading, refreshTasks }}>
+      {children}
+    </TaskContext.Provider>
+  );
 };

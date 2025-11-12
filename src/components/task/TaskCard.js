@@ -4,128 +4,151 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Card from '../common/Card';
 import PriorityBadge from './PriorityBadge';
 import { COLORS } from '../../constants/colors';
-import { formatDate, getTimeRemaining, isOverdue } from '../../utils/dateUtils';
-import { getDeadlineColor, getProgressColor } from '../../utils/colorUtils';
+import { formatDate, getTimeRemaining, isOverdue, getDaysUntilDeadline } from '../../utils/dateUtils';
+import { getDeadlineColor, getProgressColor, getCardBackgroundColor } from '../../utils/colorUtils';
 
-const TaskCard = ({ task, onPress, onLongPress, onViewProgress, isTeacher = false }) => {
+const TaskCard = ({ 
+  task, 
+  onPress, 
+  onLongPress, 
+  onViewProgress, 
+  onRequestExtension,
+  isChairman = false 
+}) => {
   const deadlineColor = getDeadlineColor(task.deadline);
+  const cardBgColor = getCardBackgroundColor(task.deadline);
   const overdue = isOverdue(task.deadline);
+  const daysLeft = getDaysUntilDeadline(task.deadline);
 
-  // For students: use their own progress
-  const progress = isTeacher 
+  // For faculty: use their own progress
+  // For chairman: use average progress
+  const progress = isChairman
     ? (task.stats?.avgProgress || 0)
     : (task.myProgress?.progress || 0);
-  
   const progressColor = getProgressColor(progress);
+
+  // Show extension button if: faculty member, not completed, and not overdue by more than 1 day
+  const showExtensionButton = !isChairman && progress < 100 && daysLeft >= -1;
 
   return (
     <View style={styles.cardWrapper}>
-      <TouchableOpacity
-        onPress={onPress}
-        onLongPress={onLongPress}
-        activeOpacity={0.7}
-        delayLongPress={500}
-      >
-        <Card style={[styles.card, overdue && progress < 100 && styles.overdueCard]}>
-          {/* Priority Banner for Urgent */}
-          {task.priority === 'urgent' && (
-            <View style={styles.urgentBanner}>
-              <Text style={styles.urgentText}>🔥 URGENT</Text>
+      <Card style={[styles.card, { backgroundColor: cardBgColor }]}>
+        <TouchableWithoutFeedback 
+          onPress={onPress}
+          onLongPress={isChairman ? onLongPress : null}
+        >
+          <View>
+            {/* Priority Banner for Urgent */}
+            {task.priority === 'urgent' && (
+              <View style={styles.urgentBanner}>
+                <Text style={styles.urgentText}>🔥 URGENT</Text>
+              </View>
+            )}
+
+            <View style={styles.header}>
+              <View style={styles.titleRow}>
+                <Text style={styles.title}>{task.title}</Text>
+                <View style={styles.priorityBadge}>
+                  <PriorityBadge priority={task.priority} />
+                </View>
+              </View>
+
+              {task.description && (
+                <Text style={styles.description} numberOfLines={2}>
+                  {task.description}
+                </Text>
+              )}
             </View>
-          )}
 
-          <View style={styles.header}>
-            <View style={styles.titleRow}>
-              <Text style={styles.title} numberOfLines={2}>
-                {task.title}
-              </Text>
-            </View>
-            <PriorityBadge priority={task.priority} style={styles.priorityBadge} />
-          </View>
+            {/* Chairman Stats */}
+            {isChairman && task.stats && (
+              <View style={styles.chairmanStats}>
+                <View style={styles.statBadge}>
+                  <Icon name="account-group" size={20} color={COLORS.primary} />
+                  <Text style={styles.statText}>
+                    {task.stats.completedFaculty}/{task.stats.totalFaculty} completed
+                  </Text>
+                </View>
+              </View>
+            )}
 
-          {task.description && (
-            <Text style={styles.description} numberOfLines={2}>
-              {task.description}
-            </Text>
-          )}
-
-          {/* Teacher Stats - Outside TouchableOpacity */}
-          {isTeacher && task.stats && (
-            <View style={styles.teacherStats}>
-              <View style={styles.statBadge}>
-                <Icon name="account-group" size={16} color={COLORS.primary} />
-                <Text style={styles.statText}>
-                  {task.stats.completedStudents}/{task.stats.totalStudents} completed
+            {/* Progress Section */}
+            <View style={styles.progressSection}>
+              <View style={styles.progressHeader}>
+                <Text style={styles.progressLabel}>
+                  {isChairman ? 'Average Progress' : 'My Progress'}
+                </Text>
+                <Text style={[styles.progressPercent, { color: progressColor }]}>
+                  {Math.round(progress)}%
                 </Text>
               </View>
-            </View>
-          )}
-
-          {/* Progress Section */}
-          <View style={styles.progressSection}>
-            <View style={styles.progressHeader}>
-              <Text style={styles.progressLabel}>
-                {isTeacher ? 'Average Progress' : 'My Progress'}
-              </Text>
-              <Text style={[styles.progressPercent, { color: progressColor }]}>
-                {Math.round(progress)}%
-              </Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    width: `${Math.round(progress)}%`,
-                    backgroundColor: progressColor,
-                  },
-                ]}
-              />
-            </View>
-          </View>
-
-          {/* Footer */}
-          <View style={styles.footer}>
-            <View style={styles.deadlineSection}>
-              <Icon name="clock-outline" size={16} color={deadlineColor} />
-              <View style={styles.deadlineText}>
-                <Text style={[styles.deadline, { color: deadlineColor }]}>
-                  {formatDate(task.deadline)}
-                </Text>
-                <Text style={[styles.timeRemaining, { color: deadlineColor }]}>
-                  {getTimeRemaining(task.deadline)}
-                </Text>
+              <View style={styles.progressBar}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${progress}%`, backgroundColor: progressColor },
+                  ]}
+                />
               </View>
             </View>
 
-            {progress === 100 && !isTeacher && (
-              <View style={styles.completedBadge}>
-                <Icon name="check-circle" size={18} color={COLORS.success} />
-                <Text style={styles.completedText}>Done</Text>
+            {/* Footer */}
+            <View style={styles.footer}>
+              <View style={styles.deadlineSection}>
+                <Icon name="calendar-clock" size={18} color={deadlineColor} />
+                <View style={styles.deadlineText}>
+                  <Text style={[styles.deadline, { color: deadlineColor }]}>
+                    {formatDate(task.deadline)}
+                  </Text>
+                  <Text style={[styles.timeRemaining, { color: deadlineColor }]}>
+                    {getTimeRemaining(task.deadline)}
+                  </Text>
+                </View>
+              </View>
+
+              {progress === 100 && !isChairman && (
+                <View style={styles.completedBadge}>
+                  <Icon name="check-circle" size={16} color={COLORS.success} />
+                  <Text style={styles.completedText}>Done</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Overdue Strip */}
+            {overdue && progress < 100 && (
+              <View style={styles.overdueStrip}>
+                <Icon name="alert" size={12} color="#fff" />
+                <Text style={styles.overdueText}>OVERDUE</Text>
+              </View>
+            )}
+
+            {/* Long Press Hint for Chairman */}
+            {isChairman && (
+              <View style={styles.longPressHint}>
+                <Text style={styles.longPressText}>Hold to edit</Text>
               </View>
             )}
           </View>
+        </TouchableWithoutFeedback>
+      </Card>
 
-          {/* Overdue Strip */}
-          {overdue && progress < 100 && (
-            <View style={styles.overdueStrip}>
-              <Icon name="alert" size={14} color="#fff" />
-              <Text style={styles.overdueText}>OVERDUE</Text>
-            </View>
-          )}
+      {/* Extension Request Button - For Faculty Only */}
+      {showExtensionButton && onRequestExtension && (
+        <TouchableOpacity
+          style={styles.extensionButtonWrapper}
+          onPress={() => onRequestExtension(task)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.extensionButton}>
+            <Icon name="clock-plus-outline" size={18} color={COLORS.warning} />
+            <Text style={styles.extensionButtonText}>Request Extension</Text>
+          </View>
+        </TouchableOpacity>
+      )}
 
-          {/* Long Press Hint for Teachers */}
-          {isTeacher && (
-            <View style={styles.longPressHint}>
-              <Text style={styles.longPressText}>Hold to edit</Text>
-            </View>
-          )}
-        </Card>
-      </TouchableOpacity>
-
-      {/* View Progress Button - OUTSIDE the main TouchableOpacity */}
-      {isTeacher && onViewProgress && (
-        <TouchableOpacity 
+      {/* View Progress Button - For Chairman Only */}
+      {isChairman && onViewProgress && (
+        <TouchableOpacity
           style={styles.viewProgressButtonWrapper}
           onPress={() => onViewProgress(task)}
           activeOpacity={0.7}
@@ -133,7 +156,6 @@ const TaskCard = ({ task, onPress, onLongPress, onViewProgress, isTeacher = fals
           <View style={styles.viewProgressButton}>
             <Icon name="chart-line" size={18} color="#fff" />
             <Text style={styles.viewProgressText}>View Progress</Text>
-            <Icon name="chevron-right" size={18} color="#fff" />
           </View>
         </TouchableOpacity>
       )}
@@ -149,10 +171,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     position: 'relative',
     overflow: 'hidden',
-  },
-  overdueCard: {
-    borderColor: COLORS.error,
-    borderWidth: 2,
   },
   urgentBanner: {
     backgroundColor: COLORS.error,
@@ -191,7 +209,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     lineHeight: 20,
   },
-  teacherStats: {
+  chairmanStats: {
     paddingVertical: 12,
     paddingHorizontal: 12,
     backgroundColor: `${COLORS.primary}08`,
@@ -208,6 +226,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
+  },
+  extensionButtonWrapper: {
+    marginHorizontal: 16,
+    marginTop: -8,
+    marginBottom: 8,
+  },
+  extensionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: COLORS.warning,
+    gap: 8,
+  },
+  extensionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.warning,
   },
   viewProgressButtonWrapper: {
     marginHorizontal: 16,

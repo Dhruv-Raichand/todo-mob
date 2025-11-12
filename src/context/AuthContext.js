@@ -10,12 +10,14 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let unsubscribeUser = null;
+
     const unsubscribeAuth = auth().onAuthStateChanged(async firebaseUser => {
       if (firebaseUser) {
         setUser(firebaseUser);
 
         // Subscribe to user data changes
-        const unsubscribeUser = firestore()
+        unsubscribeUser = firestore()
           .collection(COLLECTIONS.USERS)
           .doc(firebaseUser.uid)
           .onSnapshot(
@@ -30,8 +32,6 @@ export const AuthProvider = ({ children }) => {
               setLoading(false);
             }
           );
-
-        return () => unsubscribeUser();
       } else {
         setUser(null);
         setUserData(null);
@@ -39,15 +39,20 @@ export const AuthProvider = ({ children }) => {
       }
     });
 
-    return unsubscribeAuth;
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeUser) {
+        unsubscribeUser();
+      }
+    };
   }, []);
 
   const value = {
     user,
     userData,
     loading,
-    isTeacher: userData?.role === 'teacher' && userData?.verified === true,
-    isStudent: userData?.role === 'student',
+    isChairman: userData?.role === 'chairman',
+    isFaculty: userData?.role === 'faculty',
     login: authService.login,
     register: authService.register,
     logout: authService.logout,

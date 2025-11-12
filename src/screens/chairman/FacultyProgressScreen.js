@@ -15,7 +15,7 @@ import { getProgressColor } from '../../utils/colorUtils';
 import { STATUS_LABELS } from '../../constants/taskStatus';
 import { getRoleDisplay } from '../../utils/roleUtils';
 
-const StudentProgressScreen = ({ route, navigation }) => {
+const FacultyProgressScreen = ({ route, navigation }) => {
   const { taskId } = route.params;
   const [progressData, setProgressData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -26,7 +26,7 @@ const StudentProgressScreen = ({ route, navigation }) => {
 
   const loadProgressData = async () => {
     try {
-      const data = await taskService.getStudentProgressDetails(taskId);
+      const data = await taskService.getFacultyProgressDetails(taskId);
       setProgressData(data);
     } catch (error) {
       console.error('Error loading progress data:', error);
@@ -35,7 +35,7 @@ const StudentProgressScreen = ({ route, navigation }) => {
     }
   };
 
-  const renderStudentItem = ({ item }) => {
+  const renderFacultyItem = ({ item }) => {
     const progressColor = getProgressColor(item.progress);
     
     return (
@@ -90,14 +90,14 @@ const StudentProgressScreen = ({ route, navigation }) => {
   };
 
   const renderStats = () => {
-    if (!progressData || !progressData.students.length) return null;
+    if (!progressData || !progressData.faculty.length) return null;
 
-    const totalStudents = progressData.students.length;
-    const completed = progressData.students.filter(s => s.progress === 100).length;
-    const inProgress = progressData.students.filter(s => s.progress > 0 && s.progress < 100).length;
-    const notStarted = progressData.students.filter(s => s.progress === 0).length;
+    const totalFaculty = progressData.faculty.length;
+    const completed = progressData.faculty.filter(f => f.progress === 100).length;
+    const inProgress = progressData.faculty.filter(f => f.progress > 0 && f.progress < 100).length;
+    const notStarted = progressData.faculty.filter(f => f.progress === 0).length;
     const avgProgress = Math.round(
-      progressData.students.reduce((sum, s) => sum + s.progress, 0) / totalStudents
+      progressData.faculty.reduce((sum, f) => sum + f.progress, 0) / totalFaculty
     );
 
     return (
@@ -107,7 +107,7 @@ const StudentProgressScreen = ({ route, navigation }) => {
         <View style={styles.statsGrid}>
           <View style={styles.statItem}>
             <Icon name="account-group" size={32} color={COLORS.primary} />
-            <Text style={styles.statValue}>{totalStudents}</Text>
+            <Text style={styles.statValue}>{totalFaculty}</Text>
             <Text style={styles.statLabel}>Total</Text>
           </View>
 
@@ -141,19 +141,19 @@ const StudentProgressScreen = ({ route, navigation }) => {
   };
 
   if (loading) {
-    return <LoadingSpinner message="Loading student progress..." />;
+    return <LoadingSpinner message="Loading faculty progress..." />;
   }
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={progressData?.students || []}
+        data={progressData?.faculty || []}
         keyExtractor={item => item.id}
-        renderItem={renderStudentItem}
+        renderItem={renderFacultyItem}
         ListHeaderComponent={renderStats}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>No students assigned to this task</Text>
+          <Text style={styles.emptyText}>No faculty assigned to this task</Text>
         }
       />
     </View>
@@ -297,4 +297,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default StudentProgressScreen;
+export default FacultyProgressScreen;

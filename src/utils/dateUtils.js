@@ -67,3 +67,20 @@ export const getDaysUntilDeadline = deadline => {
   const diff = deadlineDate - now;
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 };
+
+// NEW: Get deadline urgency level for color coding
+export const getDeadlineUrgency = deadline => {
+  const days = getDaysUntilDeadline(deadline);
+  
+  if (days < 0) {
+    return 'overdue'; // Red
+  } else if (days <= 1) {
+    return 'critical'; // Dark Red
+  } else if (days <= 3) {
+    return 'urgent'; // Orange/Red
+  } else if (days <= 7) {
+    return 'warning'; // Yellow/Orange
+  } else {
+    return 'normal'; // Green/Normal
+  }
+};

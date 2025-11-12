@@ -21,58 +21,35 @@ import { COLORS } from '../../constants/colors';
 import { PRIORITY_LIST } from '../../constants/priorities';
 import { formatDate } from '../../utils/dateUtils';
 
-const EditTaskScreen = ({ route, navigation }) => {
-  const { taskId } = route.params;
+const CreateTaskScreen = ({ navigation }) => {
   const { user } = useAuth();
-  const [task, setTask] = useState(null);
   const [students, setStudents] = useState([]);
-  const [loadingTask, setLoadingTask] = useState(true);
   const [loadingStudents, setLoadingStudents] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectAll, setSelectAll] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     assignedStudents: [],
     priority: 'medium',
-    deadline: new Date(),
+    deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   });
 
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    loadTask();
     loadStudents();
   }, []);
 
-  const loadTask = async () => {
-    try {
-      const taskData = await taskService.getTask(taskId);
-      if (taskData) {
-        setTask(taskData);
-        setFormData({
-          title: taskData.title,
-          description: taskData.description || '',
-          assignedStudents: taskData.assignedStudents || [],
-          priority: taskData.priority,
-          deadline: taskData.deadline.toDate ? taskData.deadline.toDate() : new Date(taskData.deadline),
-        });
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to load task');
-      console.error(error);
-    } finally {
-      setLoadingTask(false);
-    }
-  };
-
   const loadStudents = async () => {
     try {
-      const studentsList = await userService.getAllStudents();
+      // CHANGED: Call getAllFaculty instead of getAllStudents
+      const studentsList = await userService.getAllFaculty();
       setStudents(studentsList);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load students');
+      Alert.alert('Error', 'Failed to load faculty');
       console.error(error);
     } finally {
       setLoadingStudents(false);
@@ -93,6 +70,18 @@ const EditTaskScreen = ({ route, navigation }) => {
     });
   };
 
+  const toggleSelectAll = () => {
+    if (selectAll) {
+      setFormData(prev => ({ ...prev, assignedStudents: [] }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        assignedStudents: students.map(s => s.id),
+      }));
+    }
+    setSelectAll(!selectAll);
+  };
+
   const validate = () => {
     const newErrors = {};
 
@@ -105,7 +94,7 @@ const EditTaskScreen = ({ route, navigation }) => {
     }
 
     if (formData.assignedStudents.length === 0) {
-      newErrors.assignedStudents = 'Please select at least one student';
+      newErrors.assignedStudents = 'Please select at least one faculty member';
     }
 
     if (formData.deadline < new Date()) {
@@ -116,29 +105,59 @@ const EditTaskScreen = ({ route, navigation }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async () => {
-    if (!validate()) return;
+const handleSubmit = async () => {
+  if (!validate()) return;
 
-    setSubmitting(true);
-    try {
-      await taskService.updateTask(taskId, {
-        title: formData.title.trim(),
-        description: formData.description.trim(),
-        assignedStudents: formData.assignedStudents,
-        priority: formData.priority,
-        deadline: formData.deadline,
-      });
+  if (students.length === 0) {
+    Alert.alert('Error', 'No faculty available to assign tasks');
+    return;
+  }
 
-      Alert.alert('Success', 'Task updated successfully!', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update task');
-      console.error(error);
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  // Validate user
+  if (!user || !user.uid) {
+    Alert.alert('Error', 'User session expired. Please login again.');
+    return;
+  }
+
+  // Validate all required fields
+  if (!formData.title || !formData.description || !formData.deadline || !formData.priority) {
+    Alert.alert('Error', 'Please fill all required fields');
+    return;
+  }
+
+  if (!formData.assignedStudents || formData.assignedStudents.length === 0) {
+    Alert.alert('Error', 'Please select at least one faculty member');
+    return;
+  }
+
+  setSubmitting(true);
+  try {
+    const taskData = {
+      title: formData.title.trim(),
+      description: formData.description.trim(),
+      assignedFaculty: formData.assignedStudents,
+      priority: formData.priority,
+      deadline: formData.deadline,
+      chairmanId: user.uid,
+    };
+
+    // Log for debugging
+    console.log('📝 Creating task with data:', taskData);
+
+    await taskService.createTask(taskData);
+
+    Alert.alert(
+      'Success',
+      `Task created and assigned to ${formData.assignedStudents.length} faculty member(s)!`,
+      [{ text: 'OK', onPress: () => navigation.goBack() }]
+    );
+  } catch (error) {
+    console.error('❌ Create task error:', error);
+    Alert.alert('Error', error.message || 'Failed to create task');
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   const handleDateChange = (event, selectedDate) => {
     setShowDatePicker(false);
@@ -147,14 +166,25 @@ const EditTaskScreen = ({ route, navigation }) => {
     }
   };
 
-  if (loadingTask || loadingStudents) {
-    return <LoadingSpinner message="Loading..." />;
+  if (loadingStudents) {
+    return <LoadingSpinner message="Loading faculty..." />;
+  }
+
+  if (students.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>
+          No faculty found. Faculty members need to register first.
+        </Text>
+        <Button title="Go Back" onPress={() => navigation.goBack()} />
+      </View>
+    );
   }
 
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Edit Task</Text>
+        <Text style={styles.sectionTitle}>Task Details</Text>
 
         <Input
           label="Task Title *"
@@ -176,29 +206,46 @@ const EditTaskScreen = ({ route, navigation }) => {
           icon="text"
         />
 
-        <Text style={styles.label}>Assigned Students *</Text>
-        <Card style={styles.studentsCard}>
-          {students.map(student => (
+        <View style={styles.studentsSection}>
+          <View style={styles.studentsHeader}>
+            <Text style={styles.label}>Assign to Faculty *</Text>
             <TouchableOpacity
-              key={student.id}
-              style={styles.studentRow}
-              onPress={() => toggleStudent(student.id)}
+              style={styles.selectAllButton}
+              onPress={toggleSelectAll}
             >
-              <CheckBox
-                value={formData.assignedStudents.includes(student.id)}
-                onValueChange={() => toggleStudent(student.id)}
-                tintColors={{ true: COLORS.primary, false: COLORS.border }}
-              />
-              <View style={styles.studentInfo}>
-                <Text style={styles.studentName}>{student.name}</Text>
-                <Text style={styles.studentEmail}>{student.email}</Text>
-              </View>
+              <Text style={styles.selectAllText}>
+                {selectAll ? 'Deselect All' : 'Select All'}
+              </Text>
             </TouchableOpacity>
-          ))}
-        </Card>
-        {errors.assignedStudents && (
-          <Text style={styles.errorText}>{errors.assignedStudents}</Text>
-        )}
+          </View>
+
+          <Text style={styles.selectedCount}>
+            {formData.assignedStudents.length} of {students.length} selected
+          </Text>
+
+          <Card style={styles.studentsCard}>
+            {students.map(student => (
+              <TouchableOpacity
+                key={student.id}
+                style={styles.studentRow}
+                onPress={() => toggleStudent(student.id)}
+              >
+                <CheckBox
+                  value={formData.assignedStudents.includes(student.id)}
+                  onValueChange={() => toggleStudent(student.id)}
+                  tintColors={{ true: COLORS.primary, false: COLORS.border }}
+                />
+                <View style={styles.studentInfo}>
+                  <Text style={styles.studentName}>{student.name}</Text>
+                  <Text style={styles.studentEmail}>{student.email}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </Card>
+          {errors.assignedStudents && (
+            <Text style={styles.errorText}>{errors.assignedStudents}</Text>
+          )}
+        </View>
 
         <View style={styles.pickerContainer}>
           <Text style={styles.label}>Priority</Text>
@@ -243,7 +290,7 @@ const EditTaskScreen = ({ route, navigation }) => {
         )}
 
         <Button
-          title="Update Task"
+          title="Create Task"
           onPress={handleSubmit}
           loading={submitting}
           style={styles.submitButton}
@@ -273,10 +320,34 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     marginBottom: 16,
   },
+  studentsSection: {
+    marginBottom: 16,
+  },
+  studentsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   label: {
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
+  },
+  selectAllButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+  },
+  selectAllText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  selectedCount: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
     marginBottom: 8,
   },
   studentsCard: {
@@ -338,6 +409,19 @@ const styles = StyleSheet.create({
   submitButton: {
     marginTop: 8,
   },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: COLORS.background,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
 });
 
-export default EditTaskScreen;
+export default CreateTaskScreen;

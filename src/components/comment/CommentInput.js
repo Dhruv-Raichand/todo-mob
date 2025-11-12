@@ -10,12 +10,12 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../../constants/colors';
 
-const CommentInput = ({ onSend, disabled = false }) => {
+const CommentInput = ({ onSubmit, disabled = false }) => {
   const [text, setText] = useState('');
 
   const handleSend = () => {
     if (text.trim()) {
-      onSend(text.trim());
+      onSubmit(text.trim());
       setText('');
     }
   };

@@ -21,6 +21,25 @@ export const userService = {
     }
   },
 
+  // Get all faculty (for chairman to assign tasks)
+  getAllFaculty: async () => {
+    try {
+      const facultySnapshot = await firestore()
+        .collection(COLLECTIONS.USERS)
+        .where('role', '==', ROLES.FACULTY)
+        .orderBy('name', 'asc')
+        .get();
+
+      return facultySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+    } catch (error) {
+      console.error('Get all faculty error:', error);
+      throw error;
+    }
+  },
+
   // Get user by ID
   getUserById: async userId => {
     try {
@@ -28,6 +47,7 @@ export const userService = {
         .collection(COLLECTIONS.USERS)
         .doc(userId)
         .get();
+
       return userDoc.exists ? { id: userDoc.id, ...userDoc.data() } : null;
     } catch (error) {
       console.error('Get user by ID error:', error);

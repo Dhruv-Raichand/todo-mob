@@ -2,18 +2,21 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
 import AuthNavigator from './AuthNavigator';
-import StudentNavigator from './StudentNavigator';
-import TeacherNavigator from './TeacherNavigator';
+import FacultyNavigator from './FacultyNavigator';
+import ChairmanNavigator from './ChairmanNavigator';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { View, Text, StyleSheet } from 'react-native';
 import Button from '../components/common/Button';
 import { COLORS } from '../constants/colors';
+import { ROLES } from '../constants/roles';
 
 const AppNavigator = () => {
-  const { user, userData, loading, isTeacher, isStudent, logout } = useAuth();
+  const { user, userData, loading, logout } = useAuth();
+
+  console.log('🔍 AppNavigator - User:', user?.email, 'Role:', userData?.role);
 
   if (loading) {
-    return <LoadingSpinner message="Loading..." />;
+    return <LoadingSpinner />;
   }
 
   // Not authenticated - show auth screens
@@ -25,13 +28,13 @@ const AppNavigator = () => {
     );
   }
 
-  // Teacher account waiting for verification
-  if (userData?.role === 'teacher' && !userData?.verified) {
+  // Chairman account waiting for verification
+  if (userData?.role === ROLES.CHAIRMAN && !userData?.verified) {
     return (
       <View style={styles.waitingContainer}>
         <Text style={styles.waitingTitle}>Account Pending Approval</Text>
         <Text style={styles.waitingText}>
-          Your teacher account is waiting for admin verification.
+          Your chairman account is waiting for admin verification.
         </Text>
         <Text style={styles.waitingText}>
           You will be notified once your account is approved.
@@ -49,7 +52,11 @@ const AppNavigator = () => {
   // Authenticated - show appropriate navigator
   return (
     <NavigationContainer>
-      {isTeacher ? <TeacherNavigator /> : <StudentNavigator />}
+      {userData?.role === ROLES.CHAIRMAN ? (
+        <ChairmanNavigator />
+      ) : (
+        <FacultyNavigator />
+      )}
     </NavigationContainer>
   );
 };

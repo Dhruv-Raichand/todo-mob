@@ -29,7 +29,7 @@ const RegisterScreen = ({ navigation }) => {
     email: '',
     password: '',
     confirmPassword: '',
-    role: ROLES.STUDENT,
+    role: ROLES.FACULTY, // Changed default
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -79,11 +79,12 @@ const RegisterScreen = ({ navigation }) => {
         formData.name.trim(),
         formData.role
       );
+
       Alert.alert(
         'Success',
-        formData.role === ROLES.TEACHER
-          ? 'Account created! Waiting for admin approval.'
-          : 'Account created successfully!',
+        formData.role === ROLES.CHAIRMAN
+          ? 'Chairman account created! Waiting for approval.'
+          : 'Faculty account created successfully!',
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (error) {
@@ -98,10 +99,7 @@ const RegisterScreen = ({ navigation }) => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <Text style={styles.title}>Create Account</Text>
           <Text style={styles.subtitle}>Join TaskMaster today!</Text>
@@ -110,7 +108,6 @@ const RegisterScreen = ({ navigation }) => {
         <View style={styles.form}>
           <Input
             label="Full Name"
-            placeholder="Enter your name"
             value={formData.name}
             onChangeText={text => handleChange('name', text)}
             error={errors.name}
@@ -118,8 +115,7 @@ const RegisterScreen = ({ navigation }) => {
           />
 
           <Input
-            label="Email Address"
-            placeholder="Enter your email"
+            label="Email"
             value={formData.email}
             onChangeText={text => handleChange('email', text)}
             keyboardType="email-address"
@@ -131,7 +127,6 @@ const RegisterScreen = ({ navigation }) => {
 
           <Input
             label="Password"
-            placeholder="Create a password"
             value={formData.password}
             onChangeText={text => handleChange('password', text)}
             secureTextEntry
@@ -142,7 +137,6 @@ const RegisterScreen = ({ navigation }) => {
 
           <Input
             label="Confirm Password"
-            placeholder="Re-enter your password"
             value={formData.confirmPassword}
             onChangeText={text => handleChange('confirmPassword', text)}
             secureTextEntry
@@ -159,17 +153,16 @@ const RegisterScreen = ({ navigation }) => {
                 onValueChange={value => handleChange('role', value)}
                 style={styles.picker}
               >
-                <Picker.Item label={getRoleDisplay(ROLES.STUDENT)} value={ROLES.STUDENT} />
-<Picker.Item label={getRoleDisplay(ROLES.TEACHER)} value={ROLES.TEACHER} />
-
+                <Picker.Item label={getRoleDisplay(ROLES.CHAIRMAN)} value={ROLES.CHAIRMAN} />
+                <Picker.Item label={getRoleDisplay(ROLES.FACULTY)} value={ROLES.FACULTY} />
               </Picker>
             </View>
           </View>
 
           <Button
-            title="Register"
+            title={loading ? 'Creating Account...' : 'Register'}
             onPress={handleRegister}
-            loading={loading}
+            disabled={loading}
             style={styles.registerButton}
           />
 

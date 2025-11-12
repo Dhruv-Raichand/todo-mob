@@ -19,7 +19,7 @@ const AnalyticsScreen = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = taskService.subscribeToTeacherTasks(user.uid, loadedTasks => {
+    const unsubscribe = taskService.subscribeToChairmanTasks(user.uid, loadedTasks => {
       console.log('📊 Analytics - Tasks loaded:', loadedTasks.length);
       setTasks(loadedTasks);
       setLoading(false);
@@ -32,7 +32,7 @@ const AnalyticsScreen = () => {
     if (!tasks || tasks.length === 0) {
       return {
         totalTasks: 0,
-        totalStudents: 0,
+        totalFaculty: 0,
         completedTasks: 0,
         inProgressTasks: 0,
         notStartedTasks: 0,
@@ -45,7 +45,7 @@ const AnalyticsScreen = () => {
 
     console.log('📈 Calculating analytics for', tasks.length, 'tasks');
 
-    let maxStudents = 0;
+    let maxFaculty = 0;
     let totalProgressSum = 0;
     let totalProgressCount = 0;
     let completedTasksCount = 0;
@@ -54,29 +54,27 @@ const AnalyticsScreen = () => {
     let overdueTasksCount = 0;
 
     const tasksData = tasks.map(task => {
-      const studentProgress = task.studentProgress || {};
-      const assignedStudents = task.assignedStudents || [];
-      const studentCount = assignedStudents.length;
+      const facultyProgress = task.facultyProgress || {};
+      const assignedFaculty = task.assignedFaculty || [];
+      const facultyCount = assignedFaculty.length;
 
-      maxStudents = Math.max(maxStudents, studentCount);
+      maxFaculty = Math.max(maxFaculty, facultyCount);
 
-      const progressValues = Object.values(studentProgress);
+      const progressValues = Object.values(facultyProgress);
       
-      // Calculate average progress for this task
       const taskAvgProgress = progressValues.length > 0
-        ? progressValues.reduce((sum, sp) => sum + (sp?.progress || 0), 0) / progressValues.length
+        ? progressValues.reduce((sum, fp) => sum + (fp?.progress || 0), 0) / progressValues.length
         : 0;
 
-      const taskCompletedStudents = progressValues.filter(sp => sp?.progress === 100).length;
-      const taskCompletionRate = studentCount > 0 
-        ? (taskCompletedStudents / studentCount) * 100 
+      const taskCompletedFaculty = progressValues.filter(fp => fp?.progress === 100).length;
+      const taskCompletionRate = facultyCount > 0 
+        ? (taskCompletedFaculty / facultyCount) * 100 
         : 0;
 
       console.log(`Task: ${task.title}`);
       console.log(`  Avg Progress: ${taskAvgProgress.toFixed(1)}%`);
-      console.log(`  Completed: ${taskCompletedStudents}/${studentCount}`);
+      console.log(`  Completed: ${taskCompletedFaculty}/${facultyCount}`);
 
-      // Categorize task based on average progress
       if (taskAvgProgress === 100) {
         completedTasksCount++;
       } else if (taskAvgProgress > 0) {
@@ -98,8 +96,8 @@ const AnalyticsScreen = () => {
         priority: task.priority,
         avgProgress: Math.round(taskAvgProgress),
         completionRate: Math.round(taskCompletionRate),
-        totalStudents: studentCount,
-        completedStudents: taskCompletedStudents,
+        totalFaculty: facultyCount,
+        completedFaculty: taskCompletedFaculty,
         isOverdue: isOverdue(task.deadline) && taskAvgProgress < 100,
       };
     });
@@ -121,7 +119,7 @@ const AnalyticsScreen = () => {
 
     return {
       totalTasks: tasks.length,
-      totalStudents: maxStudents,
+      totalFaculty: maxFaculty,
       completedTasks: completedTasksCount,
       inProgressTasks: inProgressTasksCount,
       notStartedTasks: notStartedTasksCount,
@@ -150,7 +148,6 @@ const AnalyticsScreen = () => {
 
   return (
     <ScrollView style={styles.container}>
-      {/* Overview Card */}
       <Card style={styles.overviewCard}>
         <Text style={styles.sectionTitle}>Overview</Text>
         
@@ -163,8 +160,8 @@ const AnalyticsScreen = () => {
 
           <View style={styles.overviewStat}>
             <Icon name="account-group" size={32} color={COLORS.info} />
-            <Text style={styles.overviewValue}>{analytics.totalStudents}</Text>
-            <Text style={styles.overviewLabel}>Students</Text>
+            <Text style={styles.overviewValue}>{analytics.totalFaculty}</Text>
+            <Text style={styles.overviewLabel}>Faculty</Text>
           </View>
 
           <View style={styles.overviewStat}>
@@ -190,7 +187,6 @@ const AnalyticsScreen = () => {
         )}
       </Card>
 
-      {/* Progress Card */}
       <Card style={styles.progressCard}>
         <Text style={styles.sectionTitle}>Overall Progress</Text>
         
@@ -221,7 +217,6 @@ const AnalyticsScreen = () => {
         </View>
       </Card>
 
-      {/* Tasks Breakdown */}
       <Card style={styles.breakdownCard}>
         <Text style={styles.sectionTitle}>Tasks Breakdown</Text>
         
@@ -251,9 +246,9 @@ const AnalyticsScreen = () => {
               </View>
 
               <View style={styles.taskStat}>
-                <Text style={styles.taskStatLabel}>Students</Text>
+                <Text style={styles.taskStatLabel}>Faculty</Text>
                 <Text style={styles.taskStatValue}>
-                  {taskData.completedStudents}/{taskData.totalStudents}
+                  {taskData.completedFaculty}/{taskData.totalFaculty}
                 </Text>
               </View>
 
@@ -287,198 +282,40 @@ const AnalyticsScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-    backgroundColor: COLORS.background,
-  },
-  emptyText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginTop: 8,
-  },
-  overviewCard: {
-    margin: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: 16,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  overviewStat: {
-    width: '48%',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  overviewValue: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginTop: 8,
-  },
-  overviewLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-  },
-  warningBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: `${COLORS.error}15`,
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 8,
-    gap: 8,
-  },
-  warningText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.error,
-  },
-  progressCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  progressCircleContainer: {
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  progressCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: `${COLORS.primary}15`,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 8,
-    borderColor: COLORS.primary,
-  },
-  progressPercentage: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  progressLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-  },
-  progressBar: {
-    height: 12,
-    backgroundColor: COLORS.border,
-    borderRadius: 6,
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
-    borderRadius: 6,
-  },
-  completionRateContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  completionLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  completionValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  breakdownCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  taskItem: {
-    padding: 16,
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  taskHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  taskTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginRight: 8,
-  },
-  overdueBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.error,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  overdueText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  taskStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 12,
-  },
-  taskStat: {
-    alignItems: 'center',
-  },
-  taskStatLabel: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginBottom: 4,
-  },
-  taskStatValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text,
-  },
-  taskProgressBar: {
-    height: 6,
-    backgroundColor: COLORS.border,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  taskProgressFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, backgroundColor: COLORS.background },
+  emptyText: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, marginTop: 16 },
+  emptySubtext: { fontSize: 14, color: COLORS.textSecondary, marginTop: 8 },
+  overviewCard: { margin: 16 },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, marginBottom: 16 },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  overviewStat: { width: '48%', alignItems: 'center', padding: 16, backgroundColor: COLORS.background, borderRadius: 12, marginBottom: 12 },
+  overviewValue: { fontSize: 28, fontWeight: 'bold', color: COLORS.text, marginTop: 8 },
+  overviewLabel: { fontSize: 12, color: COLORS.textSecondary, marginTop: 4 },
+  warningBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: `${COLORS.error}15`, padding: 12, borderRadius: 8, marginTop: 8, gap: 8 },
+  warningText: { fontSize: 14, fontWeight: '600', color: COLORS.error },
+  progressCard: { marginHorizontal: 16, marginBottom: 16 },
+  progressCircleContainer: { alignItems: 'center', marginVertical: 24 },
+  progressCircle: { width: 120, height: 120, borderRadius: 60, backgroundColor: `${COLORS.primary}15`, justifyContent: 'center', alignItems: 'center', borderWidth: 8, borderColor: COLORS.primary },
+  progressPercentage: { fontSize: 32, fontWeight: 'bold', color: COLORS.primary },
+  progressLabel: { fontSize: 12, color: COLORS.textSecondary, marginTop: 4 },
+  progressBar: { height: 12, backgroundColor: COLORS.border, borderRadius: 6, overflow: 'hidden', marginBottom: 16 },
+  progressFill: { height: '100%', backgroundColor: COLORS.primary, borderRadius: 6 },
+  completionRateContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTopWidth: 1, borderTopColor: COLORS.border },
+  completionLabel: { fontSize: 16, fontWeight: '600', color: COLORS.text },
+  completionValue: { fontSize: 24, fontWeight: 'bold' },
+  breakdownCard: { marginHorizontal: 16, marginBottom: 16 },
+  taskItem: { padding: 16, backgroundColor: COLORS.background, borderRadius: 12, marginBottom: 12 },
+  taskHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  taskTitle: { flex: 1, fontSize: 16, fontWeight: '600', color: COLORS.text, marginRight: 8 },
+  overdueBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.error, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 },
+  overdueText: { fontSize: 10, fontWeight: 'bold', color: '#fff' },
+  taskStats: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 },
+  taskStat: { alignItems: 'center' },
+  taskStatLabel: { fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 },
+  taskStatValue: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },
+  taskProgressBar: { height: 6, backgroundColor: COLORS.border, borderRadius: 3, overflow: 'hidden' },
+  taskProgressFill: { height: '100%', borderRadius: 3 },
 });
 
 export default AnalyticsScreen;
