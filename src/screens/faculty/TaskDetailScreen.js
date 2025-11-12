@@ -23,6 +23,7 @@ import { COLORS } from '../../constants/colors';
 import { formatDate, getTimeRemaining } from '../../utils/dateUtils';
 import { getDeadlineColor, getProgressColor } from '../../utils/colorUtils';
 import { getRoleDisplay } from '../../utils/roleUtils';
+import { firestore, COLLECTIONS } from '../../services/firebaseConfig';
 
 const TaskDetailScreen = ({ route, navigation }) => {
   const { taskId } = route.params;
@@ -36,12 +37,46 @@ const TaskDetailScreen = ({ route, navigation }) => {
   const [extensionReason, setExtensionReason] = useState('');
   const [submittingExtension, setSubmittingExtension] = useState(false);
 
+  // Extension request state
+  const [extReqLoading, setExtReqLoading] = useState(true);
+  const [myExtensionRequest, setMyExtensionRequest] = useState(null);
+
+useEffect(() => {
+  let unsub;
+  setExtReqLoading(true);
+  setMyExtensionRequest(null);
+
+  if (task?.id && user?.uid) {
+    unsub = firestore()
+      .collection(COLLECTIONS.TASKS)
+      .doc(task.id)
+      .collection('extensionRequests')
+      .where('facultyId', '==', user.uid)
+      .orderBy('requestedAt', 'desc')
+      .limit(1)
+      .onSnapshot(snapshot => {
+        setExtReqLoading(false);
+        if (snapshot && !snapshot.empty) {
+          setMyExtensionRequest({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
+        } else {
+          setMyExtensionRequest(null);
+        }
+      }, error => {
+        setExtReqLoading(false);
+        setMyExtensionRequest(null);
+      });
+  } else {
+    setExtReqLoading(false);
+    setMyExtensionRequest(null);
+  }
+
+  return () => unsub && unsub();
+}, [task?.id, user?.uid]);
+
+
   useEffect(() => {
     loadTask();
-    
-    // Subscribe to comments
     const unsubscribeComments = taskService.subscribeToComments(taskId, setComments);
-
     return () => {
       unsubscribeComments();
     };
@@ -62,74 +97,64 @@ const TaskDetailScreen = ({ route, navigation }) => {
     }
   };
 
-const handleRequestExtension = async () => {
-  if (!extensionReason.trim()) {
-    Alert.alert('Required', 'Please provide a reason for the extension request');
-    return;
-  }
-
-  try {
-    setSubmittingExtension(true);
-    
-    // Get faculty name from multiple sources
-    const facultyName = userData?.name || userData?.displayName || user?.displayName || user?.email?.split('@')[0] || 'Unknown Faculty';
-    
-    console.log('🔍 DEBUG - Extension Request Data:', {
-      taskId,
-      facultyId: user.uid,
-      facultyName: facultyName,
-      hasUserData: !!userData,
-      userDataKeys: userData ? Object.keys(userData) : [],
-      deadline: task.deadline,
-      reason: extensionReason.substring(0, 50),
-    });
-
-    if (!user?.uid) {
-      Alert.alert('Error', 'User ID not found. Please log in again.');
+  const handleRequestExtension = async () => {
+    if (!extensionReason.trim()) {
+      Alert.alert('Required', 'Please provide a reason for the extension request');
       return;
     }
+    try {
+      setSubmittingExtension(true);
 
-    await taskService.requestExtension(
-      taskId,
-      user.uid,
-      facultyName,
-      task.deadline,
-      extensionReason
-    );
-    
-    setShowExtensionModal(false);
-    setExtensionReason('');
-    Alert.alert('Success', 'Extension request submitted to Chairman');
+      // Always include facultyName!
+      const facultyName = userData?.name || userData?.displayName || user?.displayName || user?.email?.split('@')[0] || 'Unknown Faculty';
+      if (!user?.uid) {
+        Alert.alert('Error', 'User ID not found. Please log in again.');
+        return;
+      }
+      await taskService.requestExtension(
+        taskId,
+        user.uid,
+        facultyName,
+        task.deadline,
+        extensionReason
+      );
+      setShowExtensionModal(false);
+      setExtensionReason('');
+      Alert.alert('Success', 'Extension request submitted to Chairman');
+    } catch (error) {
+      console.error('❌ Extension request error:', error);
+      Alert.alert('Error', error.message || 'Failed to submit request');
+    } finally {
+      setSubmittingExtension(false);
+    }
+  };
+
+ const handleUpdateProgress = async () => {
+  try {
+    setUpdating(true);
+    await taskService.updateFacultyProgress(taskId, user.uid, progress);
+    Alert.alert('Success', 'Progress updated successfully!');
+    // Now update task state AFTER alert dismissed
+    setTask(prev => ({
+      ...prev,
+      myProgress: {
+        ...prev.myProgress,
+        progress: progress,
+        status: progress === 100 
+          ? 'completed' 
+          : progress > 0 
+          ? 'in_progress' 
+          : 'not_started',
+      },
+    }));
   } catch (error) {
-    console.error('❌ Extension request error:', error);
-    Alert.alert('Error', error.message || 'Failed to submit request');
+    Alert.alert('Error', 'Failed to update progress');
+    console.error(error);
   } finally {
-    setSubmittingExtension(false);
+    setUpdating(false);
   }
 };
 
-  const handleUpdateProgress = async () => {
-    try {
-      setUpdating(true);
-      await taskService.updateFacultyProgress(taskId, user.uid, progress);
-      
-      setTask(prev => ({
-        ...prev,
-        myProgress: {
-          ...prev.myProgress,
-          progress: progress,
-          status: progress === 100 ? 'completed' : progress > 0 ? 'in_progress' : 'not_started',
-        },
-      }));
-      
-      Alert.alert('Success', 'Progress updated successfully!');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update progress');
-      console.error(error);
-    } finally {
-      setUpdating(false);
-    }
-  };
 
   const handleMarkComplete = () => {
     Alert.alert(
@@ -177,12 +202,9 @@ const handleRequestExtension = async () => {
   if (loading) {
     return <LoadingSpinner message="Loading task..." />;
   }
-
-  // Wait for userData to load
   if (!userData) {
     return <LoadingSpinner message="Loading profile..." />;
   }
-
   if (!task) {
     return (
       <View style={styles.errorContainer}>
@@ -198,21 +220,59 @@ const handleRequestExtension = async () => {
   const hasProgressChanged = progress !== myProgress.progress;
   const isCompleted = progress === 100;
 
+  // Professional status banner for extension request
+ const renderExtensionStatusBanner = () => {
+    if (extReqLoading) {
+      return (
+        <View style={styles.extStatusBanner}>
+          <Text style={{ color: COLORS.textSecondary, fontStyle: "italic" }}>Checking extension request status...</Text>
+        </View>
+      );
+    }
+    if (!myExtensionRequest) return null;
+    let statusColor = COLORS.info;
+    let icon = 'clock-alert';
+    let message = 'Your extension request is pending review by Chairman.';
+    if (myExtensionRequest.status === 'approved') {
+      statusColor = COLORS.success; icon = 'check-circle';
+      message = `Extension Approved (+${myExtensionRequest.additionalDays || ''} days)`;
+    } else if (myExtensionRequest.status === 'rejected') {
+      statusColor = COLORS.error; icon = 'cancel';
+      message = `Rejected - ${myExtensionRequest.rejectionReason || 'No reason provided'}`;
+    }
+    return (
+      <View style={[styles.extStatusBanner, { backgroundColor: statusColor + '22', borderColor: statusColor }]}>
+        <Icon name={icon} size={22} color={statusColor} style={{ marginRight: 8 }} />
+        <Text style={{ color: statusColor, fontWeight: '700', flex: 1, flexWrap: 'wrap' }}>{message}</Text>
+      </View>
+    );
+  };
+
+  if (loading) return <LoadingSpinner message="Loading task..." />;
+  if (!userData) return <LoadingSpinner message="Loading profile..." />;
+  if (!task) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Task not found</Text>
+        <Button title="Go Back" onPress={() => navigation.goBack()} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
+
+        {/* Extension Banner, show only if user has requested extension */}
+        {renderExtensionStatusBanner()}
+
         {/* Header Card */}
         <Card style={styles.headerCard}>
           <View style={styles.headerRow}>
             <Text style={styles.title}>{task.title}</Text>
             <PriorityBadge priority={task.priority} />
           </View>
-
-          {task.description && (
-            <Text style={styles.description}>{task.description}</Text>
-          )}
-
-          {/* Deadline Info */}
+          {task.description && <Text style={styles.description}>{task.description}</Text>}
           <View style={styles.infoRow}>
             <Icon name="calendar-clock" size={24} color={deadlineColor} />
             <View style={styles.infoContent}>
@@ -224,7 +284,6 @@ const handleRequestExtension = async () => {
                 {getTimeRemaining(task.deadline)}
               </Text>
             </View>
-            {/* Request Extension Button */}
             <TouchableOpacity
               style={styles.extensionIconButton}
               onPress={() => setShowExtensionModal(true)}
@@ -232,8 +291,6 @@ const handleRequestExtension = async () => {
               <Icon name="clock-plus-outline" size={24} color={COLORS.warning} />
             </TouchableOpacity>
           </View>
-
-          {/* Chairman Info */}
           <View style={styles.infoRow}>
             <Icon name="account-tie" size={24} color={COLORS.primary} />
             <View style={styles.infoContent}>
@@ -249,14 +306,12 @@ const handleRequestExtension = async () => {
             <Icon name="chart-line" size={24} color={COLORS.primary} />
             <Text style={styles.sectionTitle}>My Progress</Text>
           </View>
-
           <View style={styles.progressHeader}>
             <Text style={styles.progressLabel}>Current Progress</Text>
             <Text style={[styles.progressValue, { color: progressColor }]}>
               {progress}%
             </Text>
           </View>
-
           <View style={styles.progressBarContainer}>
             <View style={styles.progressBar}>
               <View
@@ -281,7 +336,6 @@ const handleRequestExtension = async () => {
                 maximumTrackTintColor={COLORS.border}
                 thumbTintColor={progressColor}
               />
-
               <View style={styles.quickActions}>
                 <TouchableOpacity
                   style={styles.quickButton}
@@ -302,7 +356,6 @@ const handleRequestExtension = async () => {
                   <Text style={styles.quickButtonText}>75%</Text>
                 </TouchableOpacity>
               </View>
-
               {hasProgressChanged && (
                 <Button
                   title="Update Progress"
@@ -311,7 +364,6 @@ const handleRequestExtension = async () => {
                   style={styles.updateButton}
                 />
               )}
-
               <Button
                 title="Mark as Complete"
                 onPress={handleMarkComplete}
@@ -336,7 +388,6 @@ const handleRequestExtension = async () => {
             <Icon name="comment-text-multiple" size={24} color={COLORS.primary} />
             <Text style={styles.sectionTitle}>Discussion ({comments.length})</Text>
           </View>
-
           {comments.length === 0 ? (
             <Text style={styles.noComments}>No comments yet. Start the discussion!</Text>
           ) : (
@@ -347,7 +398,6 @@ const handleRequestExtension = async () => {
             </View>
           )}
         </Card>
-
         {/* Comment Input */}
         <CommentInput onSubmit={handleAddComment} />
       </ScrollView>
@@ -367,13 +417,9 @@ const handleRequestExtension = async () => {
                 <Icon name="close" size={24} color={COLORS.text} />
               </TouchableOpacity>
             </View>
-
             <View style={styles.modalBody}>
               <Text style={styles.modalTaskTitle}>{task?.title}</Text>
-              <Text style={styles.modalDeadline}>
-                Current Deadline: {formatDate(task?.deadline)}
-              </Text>
-
+              <Text style={styles.modalDeadline}>Current Deadline: {formatDate(task?.deadline)}</Text>
               <Text style={styles.inputLabel}>Reason for Extension *</Text>
               <TextInput
                 style={styles.textInput}
@@ -385,28 +431,22 @@ const handleRequestExtension = async () => {
                 numberOfLines={4}
                 textAlignVertical="top"
               />
-
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={[styles.modalButton, styles.cancelButton]}
-                  onPress={() => {
-                    setShowExtensionModal(false);
-                    setExtensionReason('');
-                  }}
-                >
+                  onPress={() => { setShowExtensionModal(false); setExtensionReason(''); }}>
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity
                   style={[styles.modalButton, styles.submitButton]}
                   onPress={handleRequestExtension}
-                  disabled={submittingExtension}
-                >
+                  disabled={submittingExtension}>
                   <Text style={styles.submitButtonText}>
                     {submittingExtension ? 'Submitting...' : 'Submit Request'}
                   </Text>
                 </TouchableOpacity>
               </View>
+              {renderExtensionStatusBanner()}
             </View>
           </View>
         </View>
@@ -414,6 +454,13 @@ const handleRequestExtension = async () => {
     </View>
   );
 };
+
+
+
+// For TaskCard, you can extract `renderExtensionStatusBanner` logic above
+// and pass extensionRequestStatus/Reason as props to show a similar badge if needed!
+
+// export 
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
@@ -432,6 +479,16 @@ const styles = StyleSheet.create({
   extensionIconButton: {
     padding: 8,
     marginLeft: 8,
+  },
+extStatusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: 8,
+    padding: 12,
+    margin: 14,
+    marginBottom: 0,
+    minHeight: 44,
   },
   progressCard: { marginHorizontal: 16, marginBottom: 16 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },

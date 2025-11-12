@@ -172,45 +172,38 @@ export const taskService = {
   },
 
   // Request deadline extension (Faculty member)
-  requestExtension: async (taskId, facultyId, facultyName, currentDeadline, reason) => {
-    try {
-      // Validate required fields
-      if (!taskId) throw new Error('Task ID is required');
-      if (!facultyId) throw new Error('Faculty ID is required'); // ✅ ADDED BACK
-      if (!currentDeadline) throw new Error('Current deadline is required');
-      if (!reason || !reason.trim()) throw new Error('Reason is required');
+// Request deadline extension (Faculty member)
+requestExtension: async (taskId, facultyId, facultyName, currentDeadline, reason) => {
+  try {
+    if (!taskId) throw new Error('Task ID is required');
+    if (!facultyId) throw new Error('Faculty ID is required');
+    if (!currentDeadline) throw new Error('Current deadline is required');
+    if (!reason || !reason.trim()) throw new Error('Reason is required');
 
-      // ✅ Use fallback for facultyName - NO VALIDATION
-      const name = facultyName && facultyName.trim() ? facultyName.trim() : 'Faculty Member';
+    // Sanitize faculty name with fallback
+   const facultyName =
+  user.name ||
+  user.displayName ||
+  user.email?.split('@')[0] ||
+  'Faculty Member';
 
-      console.log('📤 Requesting extension:', {
-        taskId,
-        facultyId,
-        facultyName: name,
-        reason: reason.substring(0, 50) + '...',
-      });
+await taskService.requestExtension(
+  selectedTask.id,
+  user.uid,
+  facultyName,
+  selectedTask.deadline,
+  reason
+);
 
-      await firestore()
-        .collection(COLLECTIONS.TASKS)
-        .doc(taskId)
-        .collection('extensionRequests')
-        .add({
-          facultyId,
-          facultyName: name,
-          currentDeadline: firestore.Timestamp.fromDate(
-            currentDeadline instanceof Date ? currentDeadline : currentDeadline.toDate()
-          ),
-          reason: reason.trim(),
-          status: 'pending',
-          requestedAt: firestore.FieldValue.serverTimestamp(),
-        });
 
-      console.log('✅ Extension request submitted successfully');
-    } catch (error) {
-      console.error('❌ Request extension error:', error);
-      throw error;
-    }
-  },
+    console.log('✅ Extension request submitted successfully');
+  } catch (error) {
+    console.error('❌ Request extension error:', error);
+    throw error;
+  }
+},
+
+
 
   // Get extension requests for a task (Chairman view)
   getExtensionRequests: async (taskId) => {

@@ -12,8 +12,10 @@ service cloud.firestore {
     match /tasks/{taskId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update, delete: if request.auth != null && 
-        (resource.data.chairmanId == request.auth.uid);
+      // ❤️ KEY FIX HERE: Allow chairman or assigned faculty to update/delete
+      allow update, delete: if request.auth != null &&
+        (resource.data.chairmanId == request.auth.uid ||
+         (resource.data.assignedFaculty != null && request.auth.uid in resource.data.assignedFaculty));
       
       // Extension requests subcollection
       match /extensionRequests/{requestId} {

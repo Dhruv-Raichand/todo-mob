@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   ScrollView,
+  TextInput,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import TaskCard from '../../components/task/TaskCard';
@@ -28,26 +29,25 @@ const ChairmanDashboard = ({ navigation }) => {
   const [filter, setFilter] = useState('all');
   const [showExtensionModal, setShowExtensionModal] = useState(false);
 
+  // NEW: State for reject modal integration
+  const [rejectModalVisible, setRejectModalVisible] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+
   useEffect(() => {
     if (!user?.uid) return;
 
-    console.log('🎯 Setting up chairman dashboard for:', user.uid);
-    
     const unsubscribeTasks = taskService.subscribeToChairmanTasks(
       user.uid,
       (fetchedTasks) => {
-        console.log('✅ Tasks received:', fetchedTasks.length);
         setTasks(fetchedTasks);
         setLoading(false);
       }
     );
 
-    // FIXED: Safe extension requests subscription
     const unsubscribeExtensions = taskService.subscribeToExtensionRequests(
       user.uid,
       (requests) => {
-        console.log('🔔 Extension requests received:', requests.length);
-        console.log('📋 Requests data:', JSON.stringify(requests, null, 2));
         setExtensionRequests(requests || []);
       }
     );
@@ -60,54 +60,37 @@ const ChairmanDashboard = ({ navigation }) => {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    
-    // Manually check for extension requests
     try {
       const allRequests = [];
       for (const task of tasks) {
         const requests = await taskService.getExtensionRequests(task.id);
         allRequests.push(...requests.map(r => ({ ...r, taskId: task.id, taskTitle: task.title })));
       }
-      console.log('🔄 Manually fetched requests:', allRequests.length);
       if (allRequests.length > 0) {
         setExtensionRequests(allRequests);
       }
     } catch (error) {
       console.error('Error manually checking requests:', error);
     }
-    
     setRefreshing(false);
   }, [tasks]);
 
   // Manual check function
   const checkExtensionRequestsManually = async () => {
     try {
-      console.log('🔍 Manually checking extension requests...');
-      
       const allRequests = [];
       for (const task of tasks) {
-        console.log(`📋 Checking task: ${task.id} - ${task.title}`);
         const requests = await taskService.getExtensionRequests(task.id);
-        console.log(`   ✅ Found ${requests.length} requests for this task`);
-        
-        requests.forEach(r => {
-          console.log(`      - Request from: ${r.facultyName}, Reason: ${r.reason}`);
-        });
-        
-        allRequests.push(...requests.map(r => ({ 
-          ...r, 
-          taskId: task.id, 
-          taskTitle: task.title 
+        allRequests.push(...requests.map(r => ({
+          ...r,
+          taskId: task.id,
+          taskTitle: task.title
         })));
       }
-      
-      console.log('📊 Total requests found:', allRequests.length);
-      console.log('📄 All requests:', JSON.stringify(allRequests, null, 2));
-      
       if (allRequests.length > 0) {
         setExtensionRequests(allRequests);
         Alert.alert(
-          'Extension Requests Found!', 
+          'Extension Requests Found!',
           `Found ${allRequests.length} pending request(s).`,
           [
             { text: 'View', onPress: () => setShowExtensionModal(true) },
@@ -118,7 +101,6 @@ const ChairmanDashboard = ({ navigation }) => {
         Alert.alert('No Requests', 'No pending extension requests found.');
       }
     } catch (error) {
-      console.error('❌ Error checking requests:', error);
       Alert.alert('Error', error.message || 'Failed to check extension requests');
     }
   };
@@ -172,39 +154,17 @@ const ChairmanDashboard = ({ navigation }) => {
     try {
       await taskService.approveExtension(request.taskId, request.id, days);
       Alert.alert('Success', `Extension of ${days} days approved!`);
-      
-      // Remove from local state
       setExtensionRequests(prev => prev.filter(r => r.id !== request.id));
-      
-      // Refresh
       setTimeout(() => onRefresh(), 1000);
     } catch (error) {
       Alert.alert('Error', 'Failed to approve extension');
-      console.error('Approve error:', error);
     }
   };
 
-  const handleRejectExtension = async (request) => {
-    Alert.prompt(
-      'Reject Extension',
-      'Please provide a reason for rejection:',
-      async (reason) => {
-        if (reason) {
-          try {
-            await taskService.rejectExtension(request.taskId, request.id, reason);
-            Alert.alert('Success', 'Extension request rejected');
-            
-            // Remove from local state
-            setExtensionRequests(prev => prev.filter(r => r.id !== request.id));
-            
-            // Refresh
-            setTimeout(() => onRefresh(), 1000);
-          } catch (error) {
-            Alert.alert('Error', 'Failed to reject extension');
-          }
-        }
-      }
-    );
+  // NEW: Proper reject flow for all platforms
+  const handleRejectExtension = (request) => {
+    setSelectedRequest(request);
+    setRejectModalVisible(true);
   };
 
   const getFilteredTasks = () => {
@@ -239,7 +199,6 @@ const ChairmanDashboard = ({ navigation }) => {
       const deadline = t.deadline.toDate();
       return deadline < now && t.stats.completedFaculty < t.stats.totalFaculty;
     }).length;
-
     return { total, active, completed, overdue };
   };
 
@@ -273,19 +232,16 @@ const ChairmanDashboard = ({ navigation }) => {
           <Text style={styles.statNumber}>{stats.total}</Text>
           <Text style={styles.statLabel}>Total</Text>
         </View>
-
         <View style={styles.statCard}>
           <Icon name="progress-clock" size={24} color={COLORS.info} />
           <Text style={styles.statNumber}>{stats.active}</Text>
           <Text style={styles.statLabel}>Active</Text>
         </View>
-
         <View style={styles.statCard}>
           <Icon name="check-circle" size={24} color={COLORS.success} />
           <Text style={styles.statNumber}>{stats.completed}</Text>
           <Text style={styles.statLabel}>Completed</Text>
         </View>
-
         <View style={styles.statCard}>
           <Icon name="alert-circle" size={24} color={COLORS.error} />
           <Text style={styles.statNumber}>{stats.overdue}</Text>
@@ -303,7 +259,6 @@ const ChairmanDashboard = ({ navigation }) => {
             All
           </Text>
         </TouchableOpacity>
-
         <TouchableOpacity
           style={[styles.filterTab, filter === 'active' && styles.filterTabActive]}
           onPress={() => setFilter('active')}
@@ -312,7 +267,6 @@ const ChairmanDashboard = ({ navigation }) => {
             Active
           </Text>
         </TouchableOpacity>
-
         <TouchableOpacity
           style={[styles.filterTab, filter === 'completed' && styles.filterTabActive]}
           onPress={() => setFilter('completed')}
@@ -321,7 +275,6 @@ const ChairmanDashboard = ({ navigation }) => {
             Completed
           </Text>
         </TouchableOpacity>
-
         <TouchableOpacity
           style={[styles.filterTab, filter === 'overdue' && styles.filterTabActive]}
           onPress={() => setFilter('overdue')}
@@ -403,18 +356,14 @@ const ChairmanDashboard = ({ navigation }) => {
                       <Icon name="account" size={20} color={COLORS.primary} />
                       <Text style={styles.requestFacultyName}>{request.facultyName}</Text>
                     </View>
-
                     <Text style={styles.requestTaskTitle}>Task: {request.taskTitle}</Text>
-
                     <Text style={styles.requestTime}>
                       {request.requestedAt ? formatDateTime(request.requestedAt) : 'Just now'}
                     </Text>
-
                     <View style={styles.requestReason}>
                       <Text style={styles.requestReasonLabel}>Reason:</Text>
                       <Text style={styles.requestReasonText}>{request.reason}</Text>
                     </View>
-
                     <View style={styles.requestActions}>
                       <Text style={styles.quickApproveLabel}>Quick Approve:</Text>
                       <View style={styles.quickButtons}>
@@ -437,7 +386,6 @@ const ChairmanDashboard = ({ navigation }) => {
                           <Text style={styles.quickButtonText}>+7 Days</Text>
                         </TouchableOpacity>
                       </View>
-
                       <TouchableOpacity
                         style={styles.rejectButton}
                         onPress={() => handleRejectExtension(request)}
@@ -449,6 +397,80 @@ const ChairmanDashboard = ({ navigation }) => {
                 ))
               )}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* REJECT MODAL */}
+      <Modal
+        visible={rejectModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setRejectModalVisible(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.2)',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <View style={{
+            width: '80%',
+            backgroundColor: COLORS.surface,
+            padding: 20,
+            borderRadius: 16
+          }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>Reject Extension</Text>
+            <Text style={{ marginBottom: 8 }}>{selectedRequest?.facultyName} - {selectedRequest?.taskTitle}</Text>
+            <TextInput
+              style={{
+                borderWidth: 1,
+                borderColor: COLORS.border,
+                borderRadius: 8,
+                padding: 12,
+                fontSize: 16,
+                color: COLORS.text,
+                minHeight: 60,
+                marginBottom: 20,
+                backgroundColor: COLORS.background,
+              }}
+              placeholder="Reason for rejection"
+              placeholderTextColor={COLORS.textSecondary}
+              value={rejectionReason}
+              onChangeText={setRejectionReason}
+              multiline
+            />
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+              <Button
+                title="Cancel"
+                onPress={() => {
+                  setRejectModalVisible(false);
+                  setRejectionReason('');
+                  setSelectedRequest(null);
+                }}
+              />
+              <Button
+                title="Reject"
+                style={{ backgroundColor: COLORS.error }}
+                onPress={async () => {
+                  if (!rejectionReason.trim()) {
+                    Alert.alert('Required', 'Please provide a reason');
+                    return;
+                  }
+                  try {
+                    await taskService.rejectExtension(selectedRequest.taskId, selectedRequest.id, rejectionReason.trim());
+                    Alert.alert('Success', 'Extension request rejected');
+                    setRejectModalVisible(false);
+                    setRejectionReason('');
+                    setSelectedRequest(null);
+                    setExtensionRequests(prev => prev.filter(r => r.id !== selectedRequest.id));
+                    setTimeout(() => onRefresh(), 1000);
+                  } catch (error) {
+                    Alert.alert('Error', 'Failed to reject extension');
+                  }
+                }}
+              />
+            </View>
           </View>
         </View>
       </Modal>
