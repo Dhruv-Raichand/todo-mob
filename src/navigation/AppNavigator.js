@@ -13,13 +13,10 @@ import { ROLES } from '../constants/roles';
 const AppNavigator = () => {
   const { user, userData, loading, logout } = useAuth();
 
-  console.log('🔍 AppNavigator - User:', user?.email, 'Role:', userData?.role);
-
   if (loading) {
     return <LoadingSpinner />;
   }
 
-  // Not authenticated - show auth screens
   if (!user) {
     return (
       <NavigationContainer>
@@ -28,7 +25,6 @@ const AppNavigator = () => {
     );
   }
 
-  // Chairman account waiting for verification
   if (userData?.role === ROLES.CHAIRMAN && !userData?.verified) {
     return (
       <View style={styles.waitingContainer}>
@@ -39,17 +35,11 @@ const AppNavigator = () => {
         <Text style={styles.waitingText}>
           You will be notified once your account is approved.
         </Text>
-        <Button
-          title="Logout"
-          onPress={logout}
-          variant="outline"
-          style={styles.logoutButton}
-        />
+        <Button title="Logout" onPress={logout} style={styles.logoutButton} />
       </View>
     );
   }
 
-  // Authenticated - show appropriate navigator
   return (
     <NavigationContainer>
       {userData?.role === ROLES.CHAIRMAN ? (

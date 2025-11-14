@@ -4,11 +4,11 @@ import { createStackNavigator } from '@react-navigation/stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../constants/colors';
 
-// CORRECTED IMPORTS - Using your actual folder structure
 import FacultyDashboard from '../screens/faculty/FacultyDashboard';
 import MyTasksScreen from '../screens/faculty/MyTasksScreen';
 import TaskDetailScreen from '../screens/faculty/TaskDetailScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
+import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -79,6 +79,11 @@ const FacultyNavigator = () => {
         name="TaskDetail"
         component={TaskDetailScreen}
         options={{ title: 'Task Details' }}
+      />
+      <Stack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{ title: 'Notifications' }}
       />
     </Stack.Navigator>
   );

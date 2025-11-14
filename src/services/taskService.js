@@ -1,5 +1,7 @@
 import { firestore, COLLECTIONS } from './firebaseConfig';
 import { TASK_STATUS } from '../constants/taskStatus';
+import { notificationService } from './notificationService';
+import { userService } from './userService';
 
 export const taskService = {
   // Create new task with per-faculty progress tracking
@@ -44,6 +46,18 @@ export const taskService = {
         });
 
       console.log('✅ Task created with ID:', taskRef.id);
+
+      // 🔔 Create notifications for assigned faculty
+      for (const facultyId of assignedFaculty) {
+        await notificationService.createNotification(
+          facultyId,
+          'task_assigned',
+          'New Task Assigned',
+          `You have been assigned: ${restData.title}`,
+          { taskId: taskRef.id }
+        );
+      }
+
       return taskRef.id;
     } catch (error) {
       console.error('❌ Create task error:', error);
@@ -172,38 +186,51 @@ export const taskService = {
   },
 
   // Request deadline extension (Faculty member)
-// Request deadline extension (Faculty member)
-requestExtension: async (taskId, facultyId, facultyName, currentDeadline, reason) => {
-  try {
-    if (!taskId) throw new Error('Task ID is required');
-    if (!facultyId) throw new Error('Faculty ID is required');
-    if (!currentDeadline) throw new Error('Current deadline is required');
-    if (!reason || !reason.trim()) throw new Error('Reason is required');
+  requestExtension: async (taskId, facultyId, facultyName, currentDeadline, reason) => {
+    try {
+      if (!taskId) throw new Error('Task ID is required');
+      if (!facultyId) throw new Error('Faculty ID is required');
+      if (!currentDeadline) throw new Error('Current deadline is required');
+      if (!reason || !reason.trim()) throw new Error('Reason is required');
 
-    // Sanitize faculty name with fallback
-   const facultyName =
-  user.name ||
-  user.displayName ||
-  user.email?.split('@')[0] ||
-  'Faculty Member';
+      // Get task to find chairman
+      const taskDoc = await firestore()
+        .collection(COLLECTIONS.TASKS)
+        .doc(taskId)
+        .get();
+      
+      const taskData = taskDoc.data();
+      if (!taskData) throw new Error('Task not found');
 
-await taskService.requestExtension(
-  selectedTask.id,
-  user.uid,
-  facultyName,
-  selectedTask.deadline,
-  reason
-);
+      // Create extension request
+      await firestore()
+        .collection(COLLECTIONS.TASKS)
+        .doc(taskId)
+        .collection('extensionRequests')
+        .add({
+          facultyId,
+          facultyName: facultyName || 'Faculty Member',
+          currentDeadline,
+          reason: reason.trim(),
+          status: 'pending',
+          requestedAt: firestore.FieldValue.serverTimestamp(),
+        });
 
+      // 🔔 Notify chairman about extension request
+      await notificationService.createNotification(
+        taskData.chairmanId,
+        'extension_request',
+        'Extension Request',
+        `${facultyName} requested deadline extension for "${taskData.title}"`,
+        { taskId }
+      );
 
-    console.log('✅ Extension request submitted successfully');
-  } catch (error) {
-    console.error('❌ Request extension error:', error);
-    throw error;
-  }
-},
-
-
+      console.log('✅ Extension request submitted successfully');
+    } catch (error) {
+      console.error('❌ Request extension error:', error);
+      throw error;
+    }
+  },
 
   // Get extension requests for a task (Chairman view)
   getExtensionRequests: async (taskId) => {
@@ -236,9 +263,20 @@ await taskService.requestExtension(
         .doc(taskId)
         .get();
       
-      const currentDeadline = taskDoc.data().deadline.toDate();
+      const taskData = taskDoc.data();
+      const currentDeadline = taskData.deadline.toDate();
       const newDeadline = new Date(currentDeadline);
       newDeadline.setDate(newDeadline.getDate() + additionalDays);
+
+      // Get request to find facultyId
+      const requestDoc = await firestore()
+        .collection(COLLECTIONS.TASKS)
+        .doc(taskId)
+        .collection('extensionRequests')
+        .doc(requestId)
+        .get();
+      
+      const requestData = requestDoc.data();
 
       // Update task deadline
       batch.update(
@@ -265,6 +303,15 @@ await taskService.requestExtension(
       );
 
       await batch.commit();
+
+      // 🔔 Notify faculty about approval
+      await notificationService.createNotification(
+        requestData.facultyId,
+        'extension_approved',
+        'Extension Approved',
+        `Your extension request for "${taskData.title}" was approved!`,
+        { taskId }
+      );
     } catch (error) {
       console.error('Approve extension error:', error);
       throw error;
@@ -274,6 +321,23 @@ await taskService.requestExtension(
   // Reject extension request (Chairman)
   rejectExtension: async (taskId, requestId, reason) => {
     try {
+      // Get request to find facultyId and task title
+      const requestDoc = await firestore()
+        .collection(COLLECTIONS.TASKS)
+        .doc(taskId)
+        .collection('extensionRequests')
+        .doc(requestId)
+        .get();
+      
+      const requestData = requestDoc.data();
+
+      const taskDoc = await firestore()
+        .collection(COLLECTIONS.TASKS)
+        .doc(taskId)
+        .get();
+      
+      const taskData = taskDoc.data();
+
       await firestore()
         .collection(COLLECTIONS.TASKS)
         .doc(taskId)
@@ -284,6 +348,15 @@ await taskService.requestExtension(
           rejectedAt: firestore.FieldValue.serverTimestamp(),
           rejectionReason: reason,
         });
+
+      // 🔔 Notify faculty about rejection
+      await notificationService.createNotification(
+        requestData.facultyId,
+        'extension_rejected',
+        'Extension Rejected',
+        `Your extension request for "${taskData.title}" was rejected. ${reason}`,
+        { taskId }
+      );
     } catch (error) {
       console.error('Reject extension error:', error);
       throw error;
@@ -370,6 +443,25 @@ await taskService.requestExtension(
           },
           updatedAt: firestore.FieldValue.serverTimestamp(),
         });
+
+      // 🔔 Notify chairman if task completed
+      if (progress === 100) {
+        const taskDoc = await firestore()
+          .collection(COLLECTIONS.TASKS)
+          .doc(taskId)
+          .get();
+        
+        const taskData = taskDoc.data();
+        const facultyUser = await userService.getUserById(facultyId);
+
+        await notificationService.createNotification(
+          taskData.chairmanId,
+          'task_completed',
+          'Task Completed',
+          `${facultyUser?.name || 'A faculty member'} completed "${taskData.title}"`,
+          { taskId }
+        );
+      }
     } catch (error) {
       console.error('Update faculty progress error:', error);
       throw error;

@@ -17,6 +17,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import Button from '../../components/common/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { taskService } from '../../services/taskService';
+import { notificationService } from '../../services/notificationService'; // ✅ ADD THIS
 import { COLORS } from '../../constants/colors';
 import { formatDateTime } from '../../utils/dateUtils';
 
@@ -28,8 +29,9 @@ const ChairmanDashboard = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState('all');
   const [showExtensionModal, setShowExtensionModal] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0); // ✅ ADD THIS
 
-  // NEW: State for reject modal integration
+  // State for reject modal integration
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -58,6 +60,21 @@ const ChairmanDashboard = ({ navigation }) => {
     };
   }, [user?.uid]);
 
+  // ✅ ADD THIS: Subscribe to notifications for unread count
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const unsubscribe = notificationService.subscribeToNotifications(
+      user.uid,
+      (notifications) => {
+        const count = notifications.filter(n => !n.read).length;
+        setUnreadCount(count);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user?.uid]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -75,7 +92,6 @@ const ChairmanDashboard = ({ navigation }) => {
     setRefreshing(false);
   }, [tasks]);
 
-  // Manual check function
   const checkExtensionRequestsManually = async () => {
     try {
       const allRequests = [];
@@ -161,7 +177,6 @@ const ChairmanDashboard = ({ navigation }) => {
     }
   };
 
-  // NEW: Proper reject flow for all platforms
   const handleRejectExtension = (request) => {
     setSelectedRequest(request);
     setRejectModalVisible(true);
@@ -211,7 +226,28 @@ const ChairmanDashboard = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Extension Notification Badge */}
+      {/* ✅ ADD THIS: Header with Notification Bell */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.greeting}>Welcome,</Text>
+          <Text style={styles.userName}>{user?.name || 'Chairman'}</Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.notificationButton}
+          onPress={() => navigation.navigate('Notifications')}
+        >
+          <Icon name="bell" size={26} color={COLORS.text} />
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Extension Notification Banner */}
       {extensionRequests.length > 0 && (
         <TouchableOpacity
           style={styles.extensionBanner}
@@ -248,7 +284,6 @@ const ChairmanDashboard = ({ navigation }) => {
           <Text style={styles.statLabel}>Overdue</Text>
         </View>
       </View>
-
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
         <TouchableOpacity
@@ -497,6 +532,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     flex: 1,
+  },header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  greeting: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  userName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginTop: 4,
+  },
+  notificationButton: {
+    padding: 8,
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: COLORS.error,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   statsContainer: {
     flexDirection: 'row',

@@ -4,14 +4,14 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../constants/colors';
 
-// CORRECTED IMPORTS - Using your actual folder structure
 import ChairmanDashboard from '../screens/chairman/ChairmanDashboard';
 import CreateTaskScreen from '../screens/chairman/CreateTaskScreen';
 import EditTaskScreen from '../screens/chairman/EditTaskScreen';
 import FacultyProgressScreen from '../screens/chairman/FacultyProgressScreen';
 import AnalyticsScreen from '../screens/chairman/AnalyticsScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
-import TaskDetailScreen from '../screens/faculty/TaskDetailScreen'; // Changed to faculty folder
+import TaskDetailScreen from '../screens/faculty/TaskDetailScreen';
+import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -108,6 +108,11 @@ const ChairmanNavigator = () => {
         name="TaskDetail"
         component={TaskDetailScreen}
         options={{ title: 'Task Details' }}
+      />
+      <Stack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{ title: 'Notifications' }}
       />
     </Stack.Navigator>
   );
