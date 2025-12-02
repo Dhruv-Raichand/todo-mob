@@ -29,7 +29,7 @@ export const notificationService = {
     }
   },
 
-  // Subscribe to user's notifications (real-time) - ✅ FIXED
+  // Subscribe to user's notifications (real-time)
   subscribeToNotifications: (userId, callback) => {
     try {
       return firestore()
@@ -39,7 +39,6 @@ export const notificationService = {
         .limit(50)
         .onSnapshot(
           snapshot => {
-            // ✅ Check if snapshot exists and has docs
             if (!snapshot || !snapshot.docs) {
               console.log('⚠️ No notifications found');
               callback([]);
@@ -56,20 +55,12 @@ export const notificationService = {
           },
           error => {
             console.error('❌ Notification subscription error:', error);
-            
-            // ✅ Check if it's an index error
-            if (error.message && error.message.includes('index')) {
-              console.error('🔥 FIRESTORE INDEX REQUIRED!');
-              console.error('Click this link to create index:', error.message);
-            }
-            
-            // Return empty array on error
             callback([]);
           }
         );
     } catch (error) {
       console.error('❌ Subscribe error:', error);
-      return () => {}; // Return empty unsubscribe function
+      return () => {};
     }
   },
 
@@ -113,8 +104,63 @@ export const notificationService = {
   deleteNotification: async (notificationId) => {
     try {
       await firestore().collection('notifications').doc(notificationId).delete();
+      console.log('✅ Notification deleted:', notificationId);
     } catch (error) {
       console.error('❌ Error deleting notification:', error);
+    }
+  },
+
+  // ✅ NEW: Delete old notifications (older than 2 days)
+  deleteOldNotifications: async (userId) => {
+    try {
+      const twoDaysAgo = new Date();
+      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
+      const snapshot = await firestore()
+        .collection('notifications')
+        .where('userId', '==', userId)
+        .where('createdAt', '<', firestore.Timestamp.fromDate(twoDaysAgo))
+        .get();
+
+      if (snapshot.empty) {
+        console.log('✅ No old notifications to delete');
+        return;
+      }
+
+      const batch = firestore().batch();
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+
+      console.log(`✅ Deleted ${snapshot.docs.length} old notifications`);
+    } catch (error) {
+      console.error('❌ Error deleting old notifications:', error);
+    }
+  },
+
+  // ✅ NEW: Delete notifications related to a deleted task
+  deleteNotificationsByTaskId: async (taskId) => {
+    try {
+      const snapshot = await firestore()
+        .collection('notifications')
+        .where('data.taskId', '==', taskId)
+        .get();
+
+      if (snapshot.empty) {
+        console.log('✅ No notifications found for deleted task');
+        return;
+      }
+
+      const batch = firestore().batch();
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+
+      console.log(`✅ Deleted ${snapshot.docs.length} notifications for task ${taskId}`);
+    } catch (error) {
+      console.error('❌ Error deleting task notifications:', error);
     }
   },
 };

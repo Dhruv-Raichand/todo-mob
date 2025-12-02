@@ -8,7 +8,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+// ✅ REMOVED: import { Picker } from '@react-native-picker/picker';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import { useAuth } from '../../hooks/useAuth';
@@ -20,7 +20,7 @@ import {
   validateRequired,
   getErrorMessage,
 } from '../../utils/validationUtils';
-import { getRoleDisplay } from '../../utils/roleUtils';
+// ✅ REMOVED: import { getRoleDisplay } from '../../utils/roleUtils';
 
 const RegisterScreen = ({ navigation }) => {
   const { register } = useAuth();
@@ -29,7 +29,7 @@ const RegisterScreen = ({ navigation }) => {
     email: '',
     password: '',
     confirmPassword: '',
-    role: ROLES.FACULTY, // Changed default
+    role: ROLES.FACULTY, // ✅ ALWAYS FACULTY - No longer changeable
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -77,14 +77,12 @@ const RegisterScreen = ({ navigation }) => {
         formData.email.trim(),
         formData.password,
         formData.name.trim(),
-        formData.role
+        ROLES.FACULTY // ✅ ALWAYS REGISTER AS FACULTY
       );
 
       Alert.alert(
         'Success',
-        formData.role === ROLES.CHAIRMAN
-          ? 'Chairman account created! Waiting for approval.'
-          : 'Faculty account created successfully!',
+        'Faculty account created successfully!', // ✅ UPDATED MESSAGE
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (error) {
@@ -102,7 +100,7 @@ const RegisterScreen = ({ navigation }) => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join TaskMaster today!</Text>
+          <Text style={styles.subtitle}>Join as Faculty Member</Text>
         </View>
 
         <View style={styles.form}>
@@ -145,6 +143,8 @@ const RegisterScreen = ({ navigation }) => {
             icon="lock-check-outline"
           />
 
+          {/* ✅ REMOVED: Role Picker - Users always register as Faculty */}
+          {/* 
           <View style={styles.pickerContainer}>
             <Text style={styles.label}>I am a:</Text>
             <View style={styles.pickerWrapper}>
@@ -157,6 +157,14 @@ const RegisterScreen = ({ navigation }) => {
                 <Picker.Item label={getRoleDisplay(ROLES.FACULTY)} value={ROLES.FACULTY} />
               </Picker>
             </View>
+          </View>
+          */}
+
+          {/* ✅ ADD THIS: Info text for users */}
+          <View style={styles.infoBox}>
+            <Text style={styles.infoText}>
+              ℹ️ All users register as Faculty. Contact admin to become Chairman.
+            </Text>
           </View>
 
           <Button
@@ -205,6 +213,8 @@ const styles = StyleSheet.create({
   form: {
     width: '100%',
   },
+  // ✅ REMOVED: pickerContainer, label, pickerWrapper, picker styles
+  /*
   pickerContainer: {
     marginBottom: 16,
   },
@@ -222,6 +232,21 @@ const styles = StyleSheet.create({
   },
   picker: {
     height: 50,
+  },
+  */
+  // ✅ ADD THIS: Info box style
+  infoBox: {
+    backgroundColor: COLORS.info + '20',
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.info,
+    marginBottom: 16,
+  },
+  infoText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
   },
   registerButton: {
     marginTop: 8,

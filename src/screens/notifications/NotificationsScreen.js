@@ -6,6 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useAuth } from '../../hooks/useAuth';
@@ -29,8 +30,29 @@ const NotificationsScreen = ({ navigation }) => {
     return () => unsubscribe();
   }, [user?.uid]);
 
+  // ✅ ADD THIS: Auto-delete old notifications on mount
+  useEffect(() => {
+    if (!user?.uid) return;
+    
+    const cleanupOldNotifications = async () => {
+      try {
+        await notificationService.deleteOldNotifications(user.uid);
+      } catch (error) {
+        console.error('Error cleaning up old notifications:', error);
+      }
+    };
+
+    cleanupOldNotifications();
+  }, [user?.uid]);
+
   const handleRefresh = async () => {
     setRefreshing(true);
+    // ✅ ADD THIS: Clean up old notifications on refresh
+    try {
+      await notificationService.deleteOldNotifications(user.uid);
+    } catch (error) {
+      console.error('Error during refresh cleanup:', error);
+    }
     setTimeout(() => setRefreshing(false), 1000);
   };
 
@@ -47,6 +69,28 @@ const NotificationsScreen = ({ navigation }) => {
     if (notification.data?.taskId) {
       navigation.navigate('TaskDetail', { taskId: notification.data.taskId });
     }
+  };
+
+  // ✅ ADD THIS: Delete single notification with confirmation
+  const handleDeleteNotification = (notificationId) => {
+    Alert.alert(
+      'Delete Notification',
+      'Are you sure you want to delete this notification?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await notificationService.deleteNotification(notificationId);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete notification');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const getIcon = (type) => {
@@ -76,6 +120,7 @@ const NotificationsScreen = ({ navigation }) => {
       <TouchableOpacity
         style={[styles.notificationCard, isUnread && styles.unreadCard]}
         onPress={() => handleNotificationPress(item)}
+        onLongPress={() => handleDeleteNotification(item.id)} // ✅ ADD THIS: Long press to delete
       >
         <View style={[styles.iconContainer, { backgroundColor: icon.color + '20' }]}>
           <Icon name={icon.name} size={24} color={icon.color} />
@@ -90,6 +135,13 @@ const NotificationsScreen = ({ navigation }) => {
           </Text>
         </View>
         {isUnread && <View style={styles.unreadDot} />}
+        {/* ✅ ADD THIS: Delete button */}
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => handleDeleteNotification(item.id)}
+        >
+          <Icon name="close" size={18} color={COLORS.textSecondary} />
+        </TouchableOpacity>
       </TouchableOpacity>
     );
   };
@@ -209,6 +261,11 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: COLORS.primary,
     marginLeft: 8,
+  },
+  // ✅ ADD THIS: Delete button style
+  deleteButton: {
+    padding: 4,
+    alignSelf: 'flex-start',
   },
   emptyContainer: {
     alignItems: 'center',

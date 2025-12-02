@@ -626,14 +626,21 @@ export const taskService = {
   },
 
   // Delete task
-  deleteTask: async taskId => {
-    try {
-      await firestore().collection(COLLECTIONS.TASKS).doc(taskId).delete();
-    } catch (error) {
-      console.error('Delete task error:', error);
-      throw error;
-    }
-  },
+  // Delete task
+deleteTask: async taskId => {
+  try {
+    await firestore().collection(COLLECTIONS.TASKS).doc(taskId).delete();
+    
+    // ✅ ADD THIS: Delete all notifications related to this task
+    await notificationService.deleteNotificationsByTaskId(taskId);
+    
+    console.log('✅ Task and related notifications deleted');
+  } catch (error) {
+    console.error('Delete task error:', error);
+    throw error;
+  }
+},
+
 
   // Add comment with user role
   addComment: async (taskId, userId, userName, userRole, text) => {
